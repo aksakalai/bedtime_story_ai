@@ -1,119 +1,43 @@
 from __future__ import annotations
 
+import html
 from pathlib import Path
 
 import gradio as gr
 
 from .pipeline import KidStoryPipeline
-
-PLAYBACK_BOOTSTRAP_JS = """
-<script>
-(() => {
-  const initialized = new WeakSet();
-
-  const pickSegment = (timeline, currentTime) => {
-    for (const segment of timeline) {
-      if (currentTime >= segment.start && currentTime < segment.end) {
-        return segment;
-      }
-    }
-    return timeline[timeline.length - 1] || null;
-  };
-
-  const syncPlayer = (player) => {
-    const timelineAttr = player.getAttribute("data-timeline");
-    if (!timelineAttr) return;
-
-    let timeline = [];
-    try {
-      timeline = JSON.parse(timelineAttr);
-    } catch (error) {
-      console.warn("Failed to parse story timeline.", error);
-      return;
-    }
-    if (!timeline.length) return;
-
-    const audio = player.querySelector("[data-storybook-audio='true']");
-    const stage = player.querySelector("[data-storybook-stage='true']");
-    const text = player.querySelector("[data-storybook-text='true']");
-    if (!audio || !stage || !text) return;
-
-    const applyFrame = () => {
-      const segment = pickSegment(timeline, audio.currentTime || 0);
-      if (!segment) return;
-      stage.style.backgroundImage = `url('${segment.image}')`;
-      text.textContent = segment.text;
-    };
-
-    if (!initialized.has(audio)) {
-      audio.addEventListener("timeupdate", applyFrame);
-      audio.addEventListener("seeked", applyFrame);
-      audio.addEventListener("loadedmetadata", applyFrame);
-      audio.addEventListener("play", applyFrame);
-      initialized.add(audio);
-    }
-
-    applyFrame();
-  };
-
-  const initAllPlayers = (root = document) => {
-    root.querySelectorAll("[data-storybook-player='true']").forEach(syncPlayer);
-  };
-
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      mutation.addedNodes.forEach((node) => {
-        if (!(node instanceof HTMLElement)) return;
-        if (node.matches?.("[data-storybook-player='true']")) {
-          syncPlayer(node);
-        } else {
-          initAllPlayers(node);
-        }
-      });
-    }
-  });
-
-  const start = () => {
-    initAllPlayers(document);
-    observer.observe(document.body, { childList: true, subtree: true });
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
-})();
-</script>
-"""
+from .schemas import StoryPackage
 
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
 
 :root {
   --paper: #fffaf0;
+  --paper-soft: rgba(255, 250, 240, 0.92);
   --ink: #1f2933;
-  --berry: #8b5e3c;
+  --muted: #556271;
+  --caramel: #8b5e3c;
+  --gold: #f6cd7a;
   --sky: #a7d8de;
-  --sun: #f9d68a;
-  --forest: #7a9d76;
 }
 
 .gradio-container {
   font-family: "DM Sans", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(249,214,138,0.8), transparent 32%),
-    radial-gradient(circle at top right, rgba(167,216,222,0.7), transparent 28%),
-    linear-gradient(180deg, #fff9ee 0%, #f8efe4 100%);
+    radial-gradient(circle at top left, rgba(249, 214, 138, 0.72), transparent 30%),
+    radial-gradient(circle at top right, rgba(167, 216, 222, 0.66), transparent 28%),
+    linear-gradient(180deg, #fff9ee 0%, #f5ead9 100%);
 }
 
 #storybook-shell {
   max-width: 1180px;
   margin: 0 auto;
+  padding-bottom: 36px;
 }
 
-.hero-card, .result-card {
-  background: rgba(255, 250, 240, 0.92);
+.hero-card,
+.surface-card {
+  background: var(--paper-soft);
   border: 1px solid rgba(139, 94, 60, 0.14);
   border-radius: 28px;
   box-shadow: 0 18px 48px rgba(31, 41, 51, 0.09);
@@ -123,61 +47,70 @@ APP_CSS = """
   padding: 28px;
 }
 
-.hero-card h1, .storybook-copy h2 {
+.hero-card h1,
+.section-title,
+.storyboard-card h3 {
   font-family: "Fraunces", serif;
 }
 
-.hero-card p {
-  color: #415164;
-  font-size: 16px;
+.hero-card p,
+.status-copy,
+.storyboard-card p {
+  color: var(--muted);
 }
 
-.storybook-player {
+.section-title {
+  margin: 0 0 10px;
+  color: var(--ink);
+}
+
+.storyboard-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
-.storybook-stage {
-  position: relative;
-  min-height: 430px;
-  background-size: cover;
-  background-position: center;
-  border-radius: 26px;
-  overflow: hidden;
-}
-
-.storybook-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(16, 28, 36, 0.08), rgba(16, 28, 36, 0.62));
-}
-
-.storybook-copy {
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  bottom: 24px;
-  color: white;
-  z-index: 1;
-  padding: 20px 22px;
+.storyboard-card {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(139, 94, 60, 0.1);
   border-radius: 22px;
-  background: rgba(21, 26, 38, 0.4);
-  backdrop-filter: blur(10px);
+  padding: 16px;
 }
 
-.storybook-kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 11px;
-  opacity: 0.78;
+.storyboard-card .eyebrow {
+  display: inline-block;
   margin-bottom: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(246, 205, 122, 0.22);
+  color: var(--caramel);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.storyboard-card h3 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 22px;
+}
+
+.storyboard-card p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.video-tip {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--muted);
 }
 """
 
 INTRO_HTML = """
 <div class="hero-card">
   <h1>Kid Drawing to Bedtime Story</h1>
-  <p>Upload a child's drawing and create a calm three-part story with matching illustrations and synced narration. The app is designed for Colab GPU sessions and saves every run so nothing gets lost between stages.</p>
+  <p>Upload one drawing and the app will turn it into a calm three-part bedtime story, three matching illustrations, spoken narration, and one final story video with built-in playback controls.</p>
 </div>
 """
 
@@ -191,6 +124,25 @@ def _progress_adapter(progress: gr.Progress):
     return callback
 
 
+def _build_storyboard_html(story: StoryPackage) -> str:
+    cards: list[str] = []
+    for index, part in enumerate(story.parts, start=1):
+        cards.append(
+            """
+            <div class="storyboard-card">
+              <div class="eyebrow">Part {index}</div>
+              <h3>{scene_goal}</h3>
+              <p>{story_text}</p>
+            </div>
+            """.format(
+                index=index,
+                scene_goal=html.escape(part.scene_goal),
+                story_text=html.escape(part.story_text),
+            )
+        )
+    return '<div class="storyboard-grid">' + "".join(cards) + "</div>"
+
+
 def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(track_tqdm=False)):
     if not image_path:
         raise gr.Error("Upload a drawing before starting the story pipeline.")
@@ -200,11 +152,16 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         f"Created run `{result.run_id}`.\n\n"
         f"Saved assets to `{result.run_dir}` and wrote the manifest to `{result.manifest_path}`."
     )
+    gallery_items = [
+        (part.image_path, f"Part {index}: {part.scene_goal}")
+        for index, part in enumerate(result.story.parts, start=1)
+    ]
     return (
         status,
         result.story.title,
         result.story_markdown,
-        result.image_gallery,
+        _build_storyboard_html(result.story),
+        gallery_items,
         result.video_path,
         result.narration_audio_path,
         result.manifest_path,
@@ -218,34 +175,42 @@ def build_demo() -> gr.Blocks:
             gr.HTML(INTRO_HTML)
 
             with gr.Row():
-                with gr.Column(scale=1):
+                with gr.Column(scale=5, min_width=320):
                     drawing_input = gr.Image(
                         label="Upload a drawing",
                         type="filepath",
                         image_mode="RGB",
                     )
                     create_button = gr.Button("Create Story", variant="primary")
-                with gr.Column(scale=1):
+                with gr.Column(scale=4, min_width=320, elem_classes=["surface-card"]):
                     gr.Markdown("### Run status")
-                    status_output = gr.Markdown()
+                    status_output = gr.Markdown(elem_classes=["status-copy"])
                     title_output = gr.Textbox(label="Story title", interactive=False)
+                    gr.Markdown(
+                        "The final output below is a real MP4 video. Use its scrub bar to jump between the three story scenes without waiting for narration to finish.",
+                        elem_classes=["video-tip"],
+                    )
+
+            with gr.Row():
+                with gr.Column(scale=7, min_width=360):
+                    gr.Markdown("## Story Video", elem_classes=["section-title"])
+                    video_output = gr.Video(label="Final story video")
+                    audio_output = gr.File(label="Narration audio")
+                with gr.Column(scale=5, min_width=320):
+                    gr.Markdown("## Story Script", elem_classes=["section-title"])
+                    story_output = gr.Markdown()
+                    manifest_output = gr.File(label="Run manifest")
+                    run_dir_output = gr.Textbox(label="Run directory", interactive=False)
 
             with gr.Row():
                 with gr.Column():
-                    gr.Markdown("### Story")
-                    story_output = gr.Markdown()
-                gallery_output = gr.Gallery(
-                    label="Generated scenes",
-                    columns=3,
-                    object_fit="cover",
-                )
-
-            with gr.Row():
-                video_output = gr.Video(label="Story video")
-                audio_output = gr.File(label="Narration audio")
-
-            manifest_output = gr.File(label="Run manifest")
-            run_dir_output = gr.Textbox(label="Run directory", interactive=False)
+                    gr.Markdown("## Storyboard", elem_classes=["section-title"])
+                    storyboard_output = gr.HTML()
+                    gallery_output = gr.Gallery(
+                        label="Scene gallery",
+                        columns=3,
+                        object_fit="cover",
+                    )
 
             create_button.click(
                 fn=generate_story,
@@ -254,6 +219,7 @@ def build_demo() -> gr.Blocks:
                     status_output,
                     title_output,
                     story_output,
+                    storyboard_output,
                     gallery_output,
                     video_output,
                     audio_output,

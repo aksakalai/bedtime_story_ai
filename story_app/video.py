@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import textwrap
 from math import ceil
 from pathlib import Path
 
@@ -12,7 +11,7 @@ from .schemas import StoryPackage, TimelineManifest
 
 VIDEO_WIDTH = 1280
 VIDEO_HEIGHT = 720
-VIDEO_FPS = 4
+VIDEO_FPS = 12
 
 
 def _load_font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
@@ -24,10 +23,77 @@ def _load_font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
+def _wrap_words(
+    draw: ImageDraw.ImageDraw,
+    words: list[str],
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont,
+    max_width: int,
+) -> list[list[str]]:
+    lines: list[list[str]] = []
+    current_line: list[str] = []
+    for word in words:
+        trial = " ".join(current_line + [word])
+        if not current_line or draw.textlength(trial, font=font) <= max_width:
+            current_line.append(word)
+        else:
+            lines.append(current_line)
+            current_line = [word]
+    if current_line:
+        lines.append(current_line)
+    return lines
+
+
+def _draw_highlighted_text(
+    draw: ImageDraw.ImageDraw,
+    story_text: str,
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont,
+    origin_x: int,
+    origin_y: int,
+    max_width: int,
+    highlighted_words: int,
+) -> None:
+    words = story_text.split()
+    lines = _wrap_words(draw, words, font, max_width)
+    highlighted_remaining = highlighted_words
+    y = origin_y
+    line_height = int(getattr(font, "size", 30) * 1.55)
+
+    for line_words in lines:
+        x = origin_x
+        for word in line_words:
+            word_text = f"{word} "
+            is_highlighted = highlighted_remaining > 0
+            bbox = draw.textbbox((x, y), word_text, font=font)
+            if is_highlighted:
+                draw.rounded_rectangle(
+                    (
+                        bbox[0] - 6,
+                        bbox[1] - 4,
+                        bbox[2] + 4,
+                        bbox[3] + 3,
+                    ),
+                    radius=10,
+                    fill=(255, 215, 150, 190),
+                )
+            draw.text(
+                (x, y),
+                word_text,
+                font=font,
+                fill=(40, 30, 18) if is_highlighted else (205, 214, 229),
+            )
+            x += int(draw.textlength(word_text, font=font))
+            if highlighted_remaining > 0:
+                highlighted_remaining -= 1
+        y += line_height
+
+
 def _render_story_frame(
     image_path: str,
     title: str,
     story_text: str,
+    part_label: str,
+    highlighted_words: int,
+    progress_ratio: float,
     output_path: Path,
 ) -> None:
     with Image.open(image_path) as source_image:
@@ -41,20 +107,28 @@ def _render_story_frame(
     draw = ImageDraw.Draw(overlay)
     title_font = _load_font(46)
     body_font = _load_font(30)
-    panel_height = 240
+    label_font = _load_font(22)
+    panel_height = 268
     panel_top = VIDEO_HEIGHT - panel_height - 32
     panel_rect = (40, panel_top, VIDEO_WIDTH - 40, VIDEO_HEIGHT - 32)
     draw.rounded_rectangle(panel_rect, radius=28, fill=(14, 20, 32, 190))
-    draw.text((72, panel_top + 26), title, fill=(255, 246, 235), font=title_font)
+    draw.text((72, panel_top + 22), title, fill=(255, 246, 235), font=title_font)
+    draw.text((72, panel_top + 74), part_label, fill=(255, 215, 150), font=label_font)
 
-    wrapped_text = textwrap.fill(story_text, width=54)
-    draw.multiline_text(
-        (72, panel_top + 100),
-        wrapped_text,
-        fill=(255, 255, 255),
+    _draw_highlighted_text(
+        draw=draw,
+        story_text=story_text,
         font=body_font,
-        spacing=10,
+        origin_x=72,
+        origin_y=panel_top + 114,
+        max_width=VIDEO_WIDTH - 144,
+        highlighted_words=highlighted_words,
     )
+
+    progress_width = int((VIDEO_WIDTH - 144) * max(0.0, min(progress_ratio, 1.0)))
+    progress_y = VIDEO_HEIGHT - 58
+    draw.rounded_rectangle((72, progress_y, VIDEO_WIDTH - 72, progress_y + 12), radius=6, fill=(77, 89, 109, 180))
+    draw.rounded_rectangle((72, progress_y, 72 + progress_width, progress_y + 12), radius=6, fill=(255, 215, 150, 255))
 
     combined = Image.alpha_composite(background.convert("RGBA"), overlay)
     combined.convert("RGB").save(output_path)
@@ -80,23 +154,25 @@ def render_story_video(
     for segment in timeline.segments:
         duration = max(segment.end_sec - segment.start_sec, 0.8)
         segment_frame_count = max(1, ceil(duration * VIDEO_FPS))
-        rendered_frame = work_dir / f"segment_{segment.index}.png"
-        _render_story_frame(
-            image_path=segment.image_path,
-            title=story.title,
-            story_text=segment.story_text,
-            output_path=rendered_frame,
-        )
+        story_words = segment.story_text.split()
         print(
             f"[video] Segment {segment.index}: duration={duration:.2f}s, "
-            f"frames={segment_frame_count}, image={segment.image_path}"
+            f"frames={segment_frame_count}, words={len(story_words)}, image={segment.image_path}"
         )
-        with Image.open(rendered_frame) as frame_image:
-            frame_image.load()
-            for _ in range(segment_frame_count):
-                sequence_frame = work_dir / f"frame_{frame_index:05d}.png"
-                frame_image.save(sequence_frame)
-                frame_index += 1
+        for local_frame_index in range(segment_frame_count):
+            progress_ratio = (local_frame_index + 1) / segment_frame_count
+            highlighted_words = max(1, ceil(progress_ratio * max(len(story_words), 1)))
+            sequence_frame = work_dir / f"frame_{frame_index:05d}.png"
+            _render_story_frame(
+                image_path=segment.image_path,
+                title=story.title,
+                story_text=segment.story_text,
+                part_label=f"Part {segment.index} of {len(timeline.segments)}",
+                highlighted_words=highlighted_words,
+                progress_ratio=progress_ratio,
+                output_path=sequence_frame,
+            )
+            frame_index += 1
 
     if frame_index == 0:
         raise RuntimeError("No video frames were rendered for the story output.")
