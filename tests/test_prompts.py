@@ -40,8 +40,8 @@ class PromptTests(unittest.TestCase):
     def test_enrich_story_with_image_prompts_adds_shared_consistency(self):
         enriched = enrich_story_with_image_prompts(self.story, self.description, DEFAULT_CONFIG)
         self.assertEqual(len(enriched.parts), 3)
-        self.assertTrue(all("consistent recurring characters" in part.image_prompt for part in enriched.parts))
-        self.assertTrue(all(f"scene {index} of 3" in part.image_prompt for index, part in enumerate(enriched.parts, start=1)))
+        self.assertTrue(all("characters:" in part.image_prompt for part in enriched.parts))
+        self.assertTrue(all(f"scene {index}" in part.image_prompt for index, part in enumerate(enriched.parts, start=1)))
 
 
 if __name__ == "__main__":

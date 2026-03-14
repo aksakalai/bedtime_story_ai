@@ -18,9 +18,11 @@ class AssetsTests(unittest.TestCase):
                 story_path=root / "story.json",
                 timeline_path=root / "timeline.json",
                 narration_audio_path=root / "audio" / "story.wav",
+                video_path=root / "video" / "story.mp4",
                 manifest_path=root / "manifest.json",
                 images_dir=root / "images",
                 audio_dir=root / "audio",
+                video_dir=root / "video",
             )
             story = StoryPackage(
                 title="Soft Stars",
@@ -35,6 +37,7 @@ class AssetsTests(unittest.TestCase):
             self.assertEqual(manifest.run_id, "demo123")
             self.assertEqual(len(manifest.scene_image_paths), 3)
             self.assertTrue(manifest.narration_audio_path.endswith("story.wav"))
+            self.assertTrue(manifest.video_path.endswith("story.mp4"))
 
 
 if __name__ == "__main__":

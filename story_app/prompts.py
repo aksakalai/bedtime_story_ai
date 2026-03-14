@@ -6,6 +6,11 @@ from .config import GenerationConfig
 from .schemas import DrawingDescription, StoryPackage, StoryPart
 
 
+def _clip_words(text: str, max_words: int) -> str:
+    words = text.replace("\n", " ").split()
+    return " ".join(words[:max_words])
+
+
 def build_description_prompt(config: GenerationConfig) -> str:
     return dedent(
         f"""
@@ -59,14 +64,12 @@ def build_story_prompt(description: DrawingDescription, config: GenerationConfig
 
 
 def build_character_bible(description: DrawingDescription) -> str:
-    characters = ", ".join(description.characters)
-    colors = ", ".join(description.color_palette)
+    characters = ", ".join(description.characters[:3])
+    colors = ", ".join(description.color_palette[:4])
     return (
-        f"storybook illustration, soft painterly lighting, child-friendly detail, "
-        f"consistent recurring characters ({characters}), "
-        f"setting: {description.setting}, "
-        f"visual style: {description.visual_style}, "
-        f"main colors: {colors}"
+        f"storybook illustration, { _clip_words(description.visual_style, 6) }, "
+        f"{ _clip_words(description.setting, 8) }, "
+        f"characters: {characters}, colors: {colors}"
     )
 
 
@@ -78,10 +81,10 @@ def enrich_story_with_image_prompts(
     character_bible = build_character_bible(description)
     enriched_parts: list[StoryPart] = []
     for index, part in enumerate(story.parts, start=1):
+        scene_focus = _clip_words(part.image_prompt or part.story_text, 18)
         prompt = (
-            f"{character_bible}, scene {index} of 3, "
-            f"{part.scene_goal}, {part.image_prompt or part.story_text}, "
-            "gentle bedtime mood, no text in image"
+            f"{character_bible}, scene {index}, { _clip_words(part.scene_goal, 6) }, "
+            f"{scene_focus}, bedtime mood, no text"
         )
         enriched_parts.append(
             StoryPart(

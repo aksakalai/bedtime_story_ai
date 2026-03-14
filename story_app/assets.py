@@ -20,9 +20,11 @@ class RunPaths:
     story_path: Path
     timeline_path: Path
     narration_audio_path: Path
+    video_path: Path
     manifest_path: Path
     images_dir: Path
     audio_dir: Path
+    video_dir: Path
 
 
 def prepare_run_paths(image_source: str | Path, outputs_root: Path) -> RunPaths:
@@ -34,8 +36,10 @@ def prepare_run_paths(image_source: str | Path, outputs_root: Path) -> RunPaths:
     run_dir = outputs_root / f"run_{run_id}"
     images_dir = run_dir / "images"
     audio_dir = run_dir / "audio"
+    video_dir = run_dir / "video"
     images_dir.mkdir(parents=True, exist_ok=True)
     audio_dir.mkdir(parents=True, exist_ok=True)
+    video_dir.mkdir(parents=True, exist_ok=True)
 
     source_path = Path(image_source)
     input_image_path = run_dir / "input_drawing.png"
@@ -54,9 +58,11 @@ def prepare_run_paths(image_source: str | Path, outputs_root: Path) -> RunPaths:
         story_path=run_dir / "story.json",
         timeline_path=run_dir / "timeline.json",
         narration_audio_path=audio_dir / "story_narration.wav",
+        video_path=video_dir / "story_video.mp4",
         manifest_path=run_dir / "manifest.json",
         images_dir=images_dir,
         audio_dir=audio_dir,
+        video_dir=video_dir,
     )
 
 
@@ -73,6 +79,7 @@ def build_run_manifest(run_paths: RunPaths, story: StoryPackage) -> RunManifest:
         story_path=str(run_paths.story_path.resolve()),
         timeline_path=str(run_paths.timeline_path.resolve()),
         narration_audio_path=str(run_paths.narration_audio_path.resolve()),
+        video_path=str(run_paths.video_path.resolve()),
         scene_image_paths=[str(Path(part.image_path).resolve()) for part in story.parts if part.image_path],
         part_audio_paths=[str(Path(part.audio_path).resolve()) for part in story.parts if part.audio_path],
     )

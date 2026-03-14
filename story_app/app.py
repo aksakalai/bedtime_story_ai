@@ -205,15 +205,15 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         result.story.title,
         result.story_markdown,
         result.image_gallery,
+        result.video_path,
         result.narration_audio_path,
-        result.playback_html,
         result.manifest_path,
         str(Path(result.run_dir).resolve()),
     )
 
 
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(css=APP_CSS, head=PLAYBACK_BOOTSTRAP_JS, title="Kid Drawing Story App") as demo:
+    with gr.Blocks(css=APP_CSS, title="Kid Drawing Story App") as demo:
         with gr.Column(elem_id="storybook-shell"):
             gr.HTML(INTRO_HTML)
 
@@ -241,11 +241,10 @@ def build_demo() -> gr.Blocks:
                 )
 
             with gr.Row():
+                video_output = gr.Video(label="Story video")
                 audio_output = gr.File(label="Narration audio")
-                manifest_output = gr.File(label="Run manifest")
 
-            gr.Markdown("### Interactive playback")
-            playback_output = gr.HTML()
+            manifest_output = gr.File(label="Run manifest")
             run_dir_output = gr.Textbox(label="Run directory", interactive=False)
 
             create_button.click(
@@ -256,14 +255,13 @@ def build_demo() -> gr.Blocks:
                     title_output,
                     story_output,
                     gallery_output,
+                    video_output,
                     audio_output,
-                    playback_output,
                     manifest_output,
                     run_dir_output,
                 ],
             )
 
-    demo.queue()
     return demo
 
 

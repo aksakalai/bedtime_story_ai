@@ -135,6 +135,7 @@ class RunManifest:
     story_path: str
     timeline_path: str
     narration_audio_path: str
+    video_path: str
     scene_image_paths: list[str]
     part_audio_paths: list[str]
 
@@ -152,6 +153,7 @@ class PipelineResult:
     manifest: RunManifest
     story_markdown: str
     playback_html: str
+    video_path: str
     image_gallery: list[str]
     narration_audio_path: str
     manifest_path: str

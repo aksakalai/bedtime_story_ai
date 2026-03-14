@@ -9,6 +9,7 @@ from .playback import build_playback_panel_html, build_timeline
 from .prompts import build_story_markdown
 from .providers import KokoroNarrator, QwenStoryWriter, SSD1BSceneGenerator, SmolVLMDescriber
 from .schemas import DrawingDescription, PipelineResult, SchemaError, StoryPackage
+from .video import render_story_video
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -90,6 +91,15 @@ class KidStoryPipeline:
         write_json(run_paths.timeline_path, timeline.to_dict())
         print(f"[pipeline] Timeline saved: {run_paths.timeline_path}")
 
+        self._notify(progress_callback, 0.96, "Rendering story video")
+        render_story_video(
+            story=story,
+            timeline=timeline,
+            output_path=run_paths.video_path,
+            work_dir=run_paths.video_dir,
+        )
+        print(f"[pipeline] Story video saved: {run_paths.video_path}")
+
         manifest = build_run_manifest(run_paths, story)
         write_json(run_paths.manifest_path, manifest.to_dict())
 
@@ -107,6 +117,7 @@ class KidStoryPipeline:
             manifest=manifest,
             story_markdown=story_markdown,
             playback_html=playback_html,
+            video_path=str(run_paths.video_path.resolve()),
             image_gallery=[part.image_path for part in story.parts],
             narration_audio_path=str(run_paths.narration_audio_path.resolve()),
             manifest_path=str(run_paths.manifest_path.resolve()),
