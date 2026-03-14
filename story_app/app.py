@@ -8,6 +8,8 @@ import gradio as gr
 from .pipeline import KidStoryPipeline
 from .schemas import StoryPackage
 
+APP_BUILD = "video-v3-20260315"
+
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
 
@@ -111,6 +113,7 @@ INTRO_HTML = """
 <div class="hero-card">
   <h1>Kid Drawing to Bedtime Story</h1>
   <p>Upload one drawing and the app will turn it into a calm three-part bedtime story, three matching illustrations, spoken narration, and one final story video with built-in playback controls.</p>
+  <p><strong>Build:</strong> video-v3-20260315</p>
 </div>
 """
 
@@ -194,7 +197,7 @@ def build_demo() -> gr.Blocks:
             with gr.Row():
                 with gr.Column(scale=7, min_width=360):
                     gr.Markdown("## Story Video", elem_classes=["section-title"])
-                    video_output = gr.Video(label="Final story video")
+                    video_output = gr.Video(label=f"Final story video ({APP_BUILD})")
                     audio_output = gr.File(label="Narration audio")
                 with gr.Column(scale=5, min_width=320):
                     gr.Markdown("## Story Script", elem_classes=["section-title"])
