@@ -6,6 +6,87 @@ import gradio as gr
 
 from .pipeline import KidStoryPipeline
 
+PLAYBACK_BOOTSTRAP_JS = """
+<script>
+(() => {
+  const initialized = new WeakSet();
+
+  const pickSegment = (timeline, currentTime) => {
+    for (const segment of timeline) {
+      if (currentTime >= segment.start && currentTime < segment.end) {
+        return segment;
+      }
+    }
+    return timeline[timeline.length - 1] || null;
+  };
+
+  const syncPlayer = (player) => {
+    const timelineAttr = player.getAttribute("data-timeline");
+    if (!timelineAttr) return;
+
+    let timeline = [];
+    try {
+      timeline = JSON.parse(timelineAttr);
+    } catch (error) {
+      console.warn("Failed to parse story timeline.", error);
+      return;
+    }
+    if (!timeline.length) return;
+
+    const audio = player.querySelector("[data-storybook-audio='true']");
+    const stage = player.querySelector("[data-storybook-stage='true']");
+    const text = player.querySelector("[data-storybook-text='true']");
+    if (!audio || !stage || !text) return;
+
+    const applyFrame = () => {
+      const segment = pickSegment(timeline, audio.currentTime || 0);
+      if (!segment) return;
+      stage.style.backgroundImage = `url('${segment.image}')`;
+      text.textContent = segment.text;
+    };
+
+    if (!initialized.has(audio)) {
+      audio.addEventListener("timeupdate", applyFrame);
+      audio.addEventListener("seeked", applyFrame);
+      audio.addEventListener("loadedmetadata", applyFrame);
+      audio.addEventListener("play", applyFrame);
+      initialized.add(audio);
+    }
+
+    applyFrame();
+  };
+
+  const initAllPlayers = (root = document) => {
+    root.querySelectorAll("[data-storybook-player='true']").forEach(syncPlayer);
+  };
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof HTMLElement)) return;
+        if (node.matches?.("[data-storybook-player='true']")) {
+          syncPlayer(node);
+        } else {
+          initAllPlayers(node);
+        }
+      });
+    }
+  });
+
+  const start = () => {
+    initAllPlayers(document);
+    observer.observe(document.body, { childList: true, subtree: true });
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+})();
+</script>
+"""
+
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
 
@@ -132,7 +213,7 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
 
 
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(css=APP_CSS, title="Kid Drawing Story App") as demo:
+    with gr.Blocks(css=APP_CSS, head=PLAYBACK_BOOTSTRAP_JS, title="Kid Drawing Story App") as demo:
         with gr.Column(elem_id="storybook-shell"):
             gr.HTML(INTRO_HTML)
 
@@ -160,7 +241,7 @@ def build_demo() -> gr.Blocks:
                 )
 
             with gr.Row():
-                audio_output = gr.Audio(label="Narration")
+                audio_output = gr.File(label="Narration audio")
                 manifest_output = gr.File(label="Run manifest")
 
             gr.Markdown("### Interactive playback")

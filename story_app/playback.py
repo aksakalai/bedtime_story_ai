@@ -50,37 +50,20 @@ def build_playback_panel_html(story: StoryPackage, timeline: TimelineManifest) -
             for segment, image_url in zip(timeline.segments, images)
         ]
     )
+    encoded_timeline = html.escape(timeline_payload, quote=True)
     title = html.escape(story.title)
     initial_text = html.escape(text_items[0] if text_items else "")
     initial_image = images[0] if images else ""
     return f"""
-<div class="storybook-player">
-  <div class="storybook-stage" id="storybook-stage" style="background-image:url('{initial_image}')">
+<div class="storybook-player" data-storybook-player="true" data-timeline="{encoded_timeline}">
+  <div class="storybook-stage" data-storybook-stage="true" style="background-image:url('{initial_image}')">
     <div class="storybook-overlay"></div>
     <div class="storybook-copy">
       <div class="storybook-kicker">Now reading</div>
       <h2>{title}</h2>
-      <p id="storybook-current-text">{initial_text}</p>
+      <p data-storybook-text="true">{initial_text}</p>
     </div>
   </div>
-  <audio id="storybook-audio" controls preload="metadata" src="{audio}"></audio>
+  <audio data-storybook-audio="true" controls preload="metadata" src="{audio}"></audio>
 </div>
-<script>
-(() => {{
-  const timeline = {timeline_payload};
-  const audio = document.getElementById("storybook-audio");
-  const stage = document.getElementById("storybook-stage");
-  const text = document.getElementById("storybook-current-text");
-  const sync = () => {{
-    const current = audio.currentTime;
-    const segment = timeline.find((item) => current >= item.start && current < item.end) || timeline[timeline.length - 1];
-    if (!segment) return;
-    stage.style.backgroundImage = `url('${{segment.image}}')`;
-    text.textContent = segment.text;
-  }};
-  audio.addEventListener("timeupdate", sync);
-  audio.addEventListener("loadedmetadata", sync);
-  sync();
-}})();
-</script>
 """

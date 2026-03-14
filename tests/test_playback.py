@@ -49,6 +49,10 @@ class PlaybackTests(unittest.TestCase):
             self.assertIn("data:image/png;base64", html)
             self.assertIn("data:audio/wav;base64", html)
             self.assertIn("Bedtime on the Hill", html)
+            self.assertIn('data-storybook-player="true"', html)
+            self.assertIn('data-storybook-audio="true"', html)
+            self.assertIn("data-timeline=", html)
+            self.assertNotIn("<script>", html)
 
 
 if __name__ == "__main__":
