@@ -5,8 +5,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
-
 from .config import GenerationConfig
 from .json_utils import extract_json_payload, parse_json_response
 from .prompts import build_description_prompt, build_story_prompt, enrich_story_with_image_prompts
@@ -107,6 +105,13 @@ def _split_story_into_three_parts(raw_text: str) -> list[str]:
     return segments[:3]
 
 
+def _sentence_case(text: str) -> str:
+    cleaned = re.sub(r"\s+", " ", text).strip(" .")
+    if not cleaned:
+        return ""
+    return cleaned[0].upper() + cleaned[1:]
+
+
 class SmolVLMDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
@@ -139,6 +144,8 @@ class SmolVLMDescriber:
         self.model.to(self.device)
 
     def _generate_text(self, image_path: str | Path, prompt: str, max_new_tokens: int) -> str:
+        from PIL import Image
+
         self._load()
         assert self.processor is not None
         assert self.model is not None
@@ -322,8 +329,13 @@ class QwenStoryWriter:
         age_range = str(payload.get("age_range") or self.config.age_range).strip() or self.config.age_range
 
         candidate_parts: list[dict[str, str]] = []
-        if isinstance(payload.get("parts"), list):
-            for part in payload["parts"]:
+        parts_value = payload.get("parts")
+        if isinstance(parts_value, dict):
+            ordered_keys = sorted(parts_value.keys())
+            parts_value = [parts_value[key] for key in ordered_keys]
+
+        if isinstance(parts_value, list):
+            for part in parts_value:
                 if not isinstance(part, dict):
                     continue
                 story_text = str(
@@ -340,6 +352,25 @@ class QwenStoryWriter:
                         "story_text": story_text,
                     }
                 )
+        elif isinstance(payload, dict):
+            for key in sorted(payload.keys()):
+                lowered = key.lower()
+                if lowered in {"part1", "part_1", "part2", "part_2", "part3", "part_3", "beginning", "middle", "ending"}:
+                    value = payload[key]
+                    if isinstance(value, dict):
+                        story_text = str(
+                            value.get("story_text")
+                            or value.get("text")
+                            or value.get("content")
+                            or value.get("summary")
+                            or ""
+                        ).strip()
+                        scene_goal = str(value.get("scene_goal") or key).strip()
+                    else:
+                        story_text = str(value).strip()
+                        scene_goal = key
+                    if story_text:
+                        candidate_parts.append({"scene_goal": scene_goal, "story_text": story_text})
 
         if candidate_parts:
             combined_text = "\n\n".join(part["story_text"] for part in candidate_parts)
@@ -372,6 +403,46 @@ class QwenStoryWriter:
             title=title,
             age_range=age_range,
             parts=normalized_parts,
+        )
+
+    def _build_story_fallback(self, description: DrawingDescription) -> StoryPackage:
+        lead_character = description.characters[0] if description.characters else "a little dreamer"
+        second_character = description.characters[1] if len(description.characters) > 1 else lead_character
+        setting = _sentence_case(description.setting) or "A cozy bedtime place"
+        color_phrase = ", ".join(description.color_palette[:3]) or "soft bedtime colors"
+        title_word = re.sub(r"[^A-Za-z0-9 ]+", "", lead_character).strip().title() or "Dream"
+
+        parts = [
+            StoryPart(
+                scene_goal="gentle beginning",
+                story_text=(
+                    f"{lead_character.title()} looked at {setting.lower()} and imagined a quiet adventure beginning there. "
+                    f"The air felt calm, the colors of {color_phrase} shimmered softly, and every little detail seemed ready "
+                    f"for a kind bedtime story. With a happy breath, {lead_character} took the first small step into the dream."
+                ),
+            ),
+            StoryPart(
+                scene_goal="cozy middle",
+                story_text=(
+                    f"Soon, {lead_character} met {second_character} and the two explored together at a slow, peaceful pace. "
+                    f"They noticed friendly shapes, warm lights, and gentle surprises all around them. Nothing felt scary or loud. "
+                    f"Instead, the whole world seemed to whisper that nighttime was for wonder, comfort, and feeling safe."
+                ),
+            ),
+            StoryPart(
+                scene_goal="sleepy ending",
+                story_text=(
+                    f"At last, the adventure grew quieter and softer until everything felt ready for rest. "
+                    f"{lead_character.title()} smiled, carried the sweetest part of the journey close, and settled into the calm night. "
+                    f"With the peaceful scene glowing nearby, the story ended in a warm, sleepy hush that felt just right for bedtime."
+                ),
+            ),
+        ]
+
+        return StoryPackage(
+            title=f"{title_word} and the Dreamy Night",
+            age_range=self.config.age_range,
+            parts=parts,
         )
 
     def write_story(self, description: DrawingDescription, attempt_index: int = 0) -> StoryPackage:
@@ -414,9 +485,15 @@ class QwenStoryWriter:
         print(f"[story] Attempt {attempt_index + 1} raw preview: {_preview_text(raw_text)}")
         try:
             story = parse_json_response(raw_text, StoryPackage)
-        except SchemaError as error:
+        except Exception as error:
             print(f"[story] Attempt {attempt_index + 1} schema mismatch: {error}")
-            story = self._coerce_story_package(raw_text, description)
+            try:
+                story = self._coerce_story_package(raw_text, description)
+                print(f"[story] Attempt {attempt_index + 1} coerced output into 3 parts.")
+            except Exception as coercion_error:
+                print(f"[story] Attempt {attempt_index + 1} coercion failed: {coercion_error}")
+                story = self._build_story_fallback(description)
+                print(f"[story] Attempt {attempt_index + 1} used deterministic fallback story.")
         return enrich_story_with_image_prompts(story, description, self.config)
 
     def unload(self) -> None:
