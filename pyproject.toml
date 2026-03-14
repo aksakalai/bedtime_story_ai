@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kid-drawing-story-app"
+version = "0.1.0"
+description = "A Colab-friendly app that turns kids' drawings into narrated bedtime stories."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Codex" }
+]
+dependencies = [
+  "accelerate>=1.1.0",
+  "bitsandbytes>=0.43.3; platform_system != 'Darwin'",
+  "diffusers>=0.31.0",
+  "gradio>=5.5.0",
+  "kokoro>=0.7.10",
+  "numpy>=1.26.0",
+  "Pillow>=10.4.0",
+  "safetensors>=0.4.5",
+  "scipy>=1.14.1",
+  "soundfile>=0.12.1",
+  "torch>=2.4.0",
+  "transformers>=4.46.0"
+]
+
+[tool.setuptools.packages.find]
+include = ["story_app*"]
