@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import textwrap
+from math import ceil
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -11,6 +12,7 @@ from .schemas import StoryPackage, TimelineManifest
 
 VIDEO_WIDTH = 1280
 VIDEO_HEIGHT = 720
+VIDEO_FPS = 4
 
 
 def _load_font(size: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
@@ -69,45 +71,56 @@ def render_story_video(
         raise RuntimeError("ffmpeg is required to render the story video but was not found on PATH.")
 
     work_dir.mkdir(parents=True, exist_ok=True)
-    frame_paths: list[Path] = []
+    for path in work_dir.glob("frame_*.png"):
+        path.unlink()
+    for path in work_dir.glob("segment_*.png"):
+        path.unlink()
+
+    frame_index = 0
     for segment in timeline.segments:
-        frame_path = work_dir / f"frame_{segment.index}.png"
+        duration = max(segment.end_sec - segment.start_sec, 0.8)
+        segment_frame_count = max(1, ceil(duration * VIDEO_FPS))
+        rendered_frame = work_dir / f"segment_{segment.index}.png"
         _render_story_frame(
             image_path=segment.image_path,
             title=story.title,
             story_text=segment.story_text,
-            output_path=frame_path,
+            output_path=rendered_frame,
         )
-        frame_paths.append(frame_path)
+        print(
+            f"[video] Segment {segment.index}: duration={duration:.2f}s, "
+            f"frames={segment_frame_count}, image={segment.image_path}"
+        )
+        with Image.open(rendered_frame) as frame_image:
+            frame_image.load()
+            for _ in range(segment_frame_count):
+                sequence_frame = work_dir / f"frame_{frame_index:05d}.png"
+                frame_image.save(sequence_frame)
+                frame_index += 1
 
-    command = [ffmpeg_path, "-y"]
-    for segment, frame_path in zip(timeline.segments, frame_paths):
-        duration = max(segment.end_sec - segment.start_sec, 0.8)
-        command.extend(["-loop", "1", "-t", f"{duration:.3f}", "-i", str(frame_path)])
+    if frame_index == 0:
+        raise RuntimeError("No video frames were rendered for the story output.")
+    print(f"[video] Total rendered frames: {frame_index}")
 
-    command.extend(["-i", timeline.audio_path])
-
-    filter_parts = [
-        f"[{index}:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},format=yuv420p,setsar=1[v{index}]"
-        for index in range(len(frame_paths))
+    command = [
+        ffmpeg_path,
+        "-y",
+        "-framerate",
+        str(VIDEO_FPS),
+        "-i",
+        str(work_dir / "frame_%05d.png"),
+        "-i",
+        timeline.audio_path,
     ]
-    concat_inputs = "".join(f"[v{index}]" for index in range(len(frame_paths)))
-    filter_complex = ";".join(filter_parts + [f"{concat_inputs}concat=n={len(frame_paths)}:v=1:a=0[v]"])
 
     command.extend(
         [
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            "[v]",
-            "-map",
-            f"{len(frame_paths)}:a",
             "-c:v",
             "libx264",
             "-pix_fmt",
             "yuv420p",
             "-r",
-            "24",
+            str(VIDEO_FPS),
             "-c:a",
             "aac",
             "-movflags",
