@@ -31,9 +31,11 @@ class KidStoryPipeline:
         last_error: Exception | None = None
         for attempt_index in range(max_attempts):
             try:
+                print(f"[pipeline] {label}: attempt {attempt_index + 1}/{max_attempts}")
                 return action(attempt_index)
             except SchemaError as exc:
                 last_error = exc
+                print(f"[pipeline] {label}: attempt {attempt_index + 1} failed with schema error: {exc}")
         raise RuntimeError(f"Failed to produce valid {label} after {max_attempts} attempts: {last_error}")
 
     def _save_story(self, run_paths: RunPaths, story: StoryPackage) -> None:
@@ -44,8 +46,10 @@ class KidStoryPipeline:
         image_path: str | Path,
         progress_callback: ProgressCallback | None = None,
     ) -> PipelineResult:
+        print("[pipeline] Starting story generation")
         self._notify(progress_callback, 0.02, "Preparing output folders")
         run_paths = prepare_run_paths(image_path, self.config.outputs_root)
+        print(f"[pipeline] Run directory: {run_paths.run_dir}")
 
         describer = SmolVLMDescriber(self.config)
         self._notify(progress_callback, 0.12, "Describing the drawing")
@@ -55,6 +59,7 @@ class KidStoryPipeline:
         )
         assert isinstance(description, DrawingDescription)
         write_json(run_paths.description_path, description.to_dict())
+        print(f"[pipeline] Drawing description saved: {run_paths.description_path}")
         describer.unload()
 
         writer = QwenStoryWriter(self.config)
@@ -65,21 +70,25 @@ class KidStoryPipeline:
         )
         assert isinstance(story, StoryPackage)
         self._save_story(run_paths, story)
+        print(f"[pipeline] Story saved with {len(story.parts)} parts: {run_paths.story_path}")
         writer.unload()
 
         image_generator = SSD1BSceneGenerator(self.config)
         self._notify(progress_callback, 0.56, "Generating storybook scenes")
         story = image_generator.generate(story, run_paths.images_dir)
         self._save_story(run_paths, story)
+        print("[pipeline] Scene images generated")
         image_generator.unload()
 
         self._notify(progress_callback, 0.78, "Narrating the story")
         story = self._narrator.narrate(story, run_paths.audio_dir, run_paths.narration_audio_path)
         self._save_story(run_paths, story)
+        print(f"[pipeline] Narration audio saved: {run_paths.narration_audio_path}")
 
         self._notify(progress_callback, 0.9, "Syncing playback timeline")
         timeline = build_timeline(story, str(run_paths.narration_audio_path.resolve()))
         write_json(run_paths.timeline_path, timeline.to_dict())
+        print(f"[pipeline] Timeline saved: {run_paths.timeline_path}")
 
         manifest = build_run_manifest(run_paths, story)
         write_json(run_paths.manifest_path, manifest.to_dict())
@@ -88,6 +97,7 @@ class KidStoryPipeline:
         playback_html = build_playback_panel_html(story, timeline)
 
         self._notify(progress_callback, 1.0, "Story ready")
+        print("[pipeline] Story generation complete")
         return PipelineResult(
             run_id=run_paths.run_id,
             run_dir=run_paths.run_dir.resolve(),

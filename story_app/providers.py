@@ -8,9 +8,9 @@ from typing import Any
 from PIL import Image
 
 from .config import GenerationConfig
-from .json_utils import parse_json_response
+from .json_utils import extract_json_payload, parse_json_response
 from .prompts import build_description_prompt, build_story_prompt, enrich_story_with_image_prompts
-from .schemas import DrawingDescription, StoryPackage, StoryPart
+from .schemas import DrawingDescription, SchemaError, StoryPackage, StoryPart
 
 
 def _clear_torch_memory() -> None:
@@ -74,6 +74,37 @@ def _parse_summary_text(raw_text: str, fallback: str) -> str:
         return fallback
     sentences = re.split(r"(?<=[.!?])\s+", text)
     return " ".join(sentences[:2]).strip()
+
+
+def _preview_text(raw_text: str, limit: int = 600) -> str:
+    text = _clean_model_text(raw_text).replace("\n", " ")
+    return text[:limit] + ("..." if len(text) > limit else "")
+
+
+def _split_story_into_three_parts(raw_text: str) -> list[str]:
+    clean_text = _clean_model_text(raw_text)
+    if not clean_text:
+        return []
+
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", clean_text) if part.strip()]
+    source_chunks = paragraphs
+    if len(source_chunks) < 3:
+        sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", clean_text) if sentence.strip()]
+        source_chunks = sentences or [clean_text]
+
+    buckets = [[] for _ in range(3)]
+    for index, chunk in enumerate(source_chunks):
+        bucket_index = min(index * 3 // len(source_chunks), 2)
+        buckets[bucket_index].append(chunk)
+
+    segments = [" ".join(bucket).strip() for bucket in buckets if bucket]
+    if not segments:
+        return []
+    while len(segments) < 3:
+        segments.append(segments[-1])
+    if len(segments) > 3:
+        segments = segments[:2] + [" ".join(segments[2:]).strip()]
+    return segments[:3]
 
 
 class SmolVLMDescriber:
@@ -225,6 +256,10 @@ class SmolVLMDescriber:
         try:
             return parse_json_response(raw_text, DrawingDescription)
         except Exception:
+            print(
+                f"[describe] Attempt {attempt_index + 1} returned non-JSON output. "
+                f"Preview: {_preview_text(raw_text)}"
+            )
             return self._describe_fieldwise(image_path)
 
     def unload(self) -> None:
@@ -275,6 +310,70 @@ class QwenStoryWriter:
         except StopIteration:
             self.input_device = "cpu"
 
+    def _coerce_story_package(self, raw_text: str, description: DrawingDescription) -> StoryPackage:
+        try:
+            payload = extract_json_payload(raw_text)
+        except SchemaError:
+            payload = {}
+
+        title = str(payload.get("title") or f"{description.characters[0].title()} Bedtime Story").strip()
+        if not title:
+            title = "Bedtime Story"
+        age_range = str(payload.get("age_range") or self.config.age_range).strip() or self.config.age_range
+
+        candidate_parts: list[dict[str, str]] = []
+        if isinstance(payload.get("parts"), list):
+            for part in payload["parts"]:
+                if not isinstance(part, dict):
+                    continue
+                story_text = str(
+                    part.get("story_text")
+                    or part.get("text")
+                    or part.get("content")
+                    or ""
+                ).strip()
+                if not story_text:
+                    continue
+                candidate_parts.append(
+                    {
+                        "scene_goal": str(part.get("scene_goal") or part.get("scene") or "").strip(),
+                        "story_text": story_text,
+                    }
+                )
+
+        if candidate_parts:
+            combined_text = "\n\n".join(part["story_text"] for part in candidate_parts)
+        else:
+            combined_text = str(
+                payload.get("story")
+                or payload.get("story_text")
+                or payload.get("summary")
+                or raw_text
+            )
+
+        story_chunks = _split_story_into_three_parts(combined_text)
+        if not story_chunks:
+            raise SchemaError("Could not coerce model output into three story parts.")
+
+        default_goals = ["gentle beginning", "cozy middle", "sleepy ending"]
+        normalized_parts: list[StoryPart] = []
+        for index, story_text in enumerate(story_chunks):
+            scene_goal = default_goals[index]
+            if index < len(candidate_parts) and candidate_parts[index].get("scene_goal"):
+                scene_goal = candidate_parts[index]["scene_goal"]
+            normalized_parts.append(
+                StoryPart(
+                    scene_goal=scene_goal,
+                    story_text=story_text,
+                )
+            )
+
+        return StoryPackage(
+            title=title,
+            age_range=age_range,
+            parts=normalized_parts,
+        )
+
     def write_story(self, description: DrawingDescription, attempt_index: int = 0) -> StoryPackage:
         self._load()
         assert self.tokenizer is not None
@@ -312,7 +411,12 @@ class QwenStoryWriter:
         )
         prompt_length = inputs["input_ids"].shape[1]
         raw_text = self.tokenizer.decode(output_ids[0][prompt_length:], skip_special_tokens=True)
-        story = parse_json_response(raw_text, StoryPackage)
+        print(f"[story] Attempt {attempt_index + 1} raw preview: {_preview_text(raw_text)}")
+        try:
+            story = parse_json_response(raw_text, StoryPackage)
+        except SchemaError as error:
+            print(f"[story] Attempt {attempt_index + 1} schema mismatch: {error}")
+            story = self._coerce_story_package(raw_text, description)
         return enrich_story_with_image_prompts(story, description, self.config)
 
     def unload(self) -> None:

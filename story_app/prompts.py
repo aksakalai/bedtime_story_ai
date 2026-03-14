@@ -38,10 +38,6 @@ def build_story_prompt(description: DrawingDescription, config: GenerationConfig
         Each part must contain:
         - scene_goal
         - story_text
-        - image_prompt
-        - image_path
-        - audio_path
-        - duration_sec
 
         Story rules:
         - English only.
@@ -49,9 +45,6 @@ def build_story_prompt(description: DrawingDescription, config: GenerationConfig
         - No scary, violent, or high-stakes conflict.
         - Each `story_text` must be around 40 to 60 words.
         - The 3 parts should flow from beginning, middle, to gentle ending.
-        - Set `image_path` and `audio_path` to empty strings.
-        - Set `duration_sec` to 0.
-        - Keep `image_prompt` short and focused on the scene for that part.
         - Do not include markdown, code fences, or extra commentary.
 
         Drawing description:
