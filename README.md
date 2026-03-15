@@ -76,7 +76,7 @@ print("Story model:", story_app.config.DEFAULT_CONFIG.models.story_writer)
 print("Part image model:", story_app.config.DEFAULT_CONFIG.models.part_image_generator)
 
 demo = story_app.app.build_demo()
-demo.launch(debug=True, share=True, inline=False)
+demo.launch(debug=True, share=True, inline=True)
 ```
 
 ## Models

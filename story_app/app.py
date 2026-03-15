@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import gradio as gr
+from PIL import Image
 
 from .config import APP_BUILD, DEFAULT_CONFIG
 from .pipeline import KidStoryPipeline
@@ -92,6 +93,13 @@ def _progress_adapter(progress: gr.Progress):
     return callback
 
 
+def _load_image_for_ui(image_path: str | None):
+    if not image_path:
+        return None
+    with Image.open(image_path) as image:
+        return image.convert("RGB").copy()
+
+
 def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(track_tqdm=False)):
     if not image_path:
         raise gr.Error("Upload a drawing before starting.")
@@ -110,15 +118,15 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
     )
     return (
         status,
-        result.input_image_path,
+        _load_image_for_ui(result.input_image_path),
         result.description.description_text,
         result.full_conversation_text,
         result.part_1_text,
-        result.story_part_1_image_path,
+        _load_image_for_ui(result.story_part_1_image_path),
         result.part_2_text,
-        result.story_part_2_image_path,
+        _load_image_for_ui(result.story_part_2_image_path),
         result.part_3_text,
-        result.story_part_3_image_path,
+        _load_image_for_ui(result.story_part_3_image_path),
         str(Path(result.run_dir).resolve()),
     )
 
@@ -153,7 +161,7 @@ def build_demo() -> gr.Blocks:
                     run_dir_output = gr.Textbox(label="Run directory", interactive=False)
 
             with gr.Column(elem_classes=["surface-card"]):
-                preview_image = gr.Image(label="Uploaded image", interactive=False, type="filepath")
+                preview_image = gr.Image(label="Uploaded image", interactive=False)
                 description_output = gr.Textbox(
                     label="Generated description",
                     lines=8,
@@ -172,7 +180,6 @@ def build_demo() -> gr.Blocks:
                     part_1_image_output = gr.Image(
                         label="Part 1 image",
                         interactive=False,
-                        type="filepath",
                         height=560,
                         elem_classes=["story-part-image"],
                     )
@@ -182,7 +189,6 @@ def build_demo() -> gr.Blocks:
                     part_2_image_output = gr.Image(
                         label="Part 2 image",
                         interactive=False,
-                        type="filepath",
                         height=560,
                         elem_classes=["story-part-image"],
                     )
@@ -192,7 +198,6 @@ def build_demo() -> gr.Blocks:
                     part_3_image_output = gr.Image(
                         label="Part 3 image",
                         interactive=False,
-                        type="filepath",
                         height=560,
                         elem_classes=["story-part-image"],
                     )
@@ -220,4 +225,4 @@ def build_demo() -> gr.Blocks:
 
 def main() -> None:
     demo = build_demo()
-    demo.launch()
+    demo.launch(debug=True, share=True, inline=True)
