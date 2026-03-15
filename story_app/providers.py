@@ -93,11 +93,28 @@ class Qwen2VLImageDescriber:
         )
         prompt_length = prepared_inputs["input_ids"].shape[1]
         completion = generated_ids[:, prompt_length:]
+        generated_token_count = int(completion.shape[1])
+        hit_token_cap = generated_token_count >= self.config.description_max_tokens
+        eos_token_id = None
+        if hasattr(self.processor, "tokenizer") and getattr(self.processor.tokenizer, "eos_token_id", None) is not None:
+            eos_token_id = int(self.processor.tokenizer.eos_token_id)
+        ended_with_eos = bool(
+            generated_token_count
+            and eos_token_id is not None
+            and int(completion[0, -1].item()) == eos_token_id
+        )
         decoded = self.processor.batch_decode(
             completion,
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,
         )[0].strip()
+        print(
+            "[describe] Generation stats: "
+            f"generated_tokens={generated_token_count}, "
+            f"max_new_tokens={self.config.description_max_tokens}, "
+            f"hit_token_cap={hit_token_cap}, "
+            f"ended_with_eos={ended_with_eos}"
+        )
         print(f"[describe] Output word count: {len(decoded.split())}")
         print(f"[describe] Output preview: {decoded[:240]}")
         return decoded

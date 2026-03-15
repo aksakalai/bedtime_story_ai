@@ -7,6 +7,7 @@ from story_app.prompts import (
     extract_visual_anchor_words,
     find_anchor_overlap,
     validate_description_text,
+    validate_story_grounding,
     validate_story_part_text,
 )
 from story_app.schemas import ValidationError
@@ -41,6 +42,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("middle of the same story", prompt)
         self.assertIn("specific gentle event", prompt)
         self.assertIn("directly involve something clearly visible in the drawing", prompt)
+        self.assertIn("Required visual anchors:", prompt)
 
     def test_build_story_part_3_prompt_includes_part_1_and_part_2(self):
         prompt = build_story_part_prompt(
@@ -60,6 +62,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("End with a complete sentence.", prompt)
         self.assertIn("Stop immediately after the paragraph.", prompt)
         self.assertIn("Use at least three concrete details", prompt)
+        self.assertIn("The story must take place in the exact pictured scene", prompt)
+        self.assertIn("Keep the action physically near the pictured objects", prompt)
 
     def test_extract_visual_anchor_words_prefers_visual_nouns(self):
         anchors = extract_visual_anchor_words(
@@ -78,6 +82,14 @@ class PromptTests(unittest.TestCase):
         self.assertIn("house", overlap)
         self.assertIn("trees", overlap)
         self.assertIn("cars", overlap)
+
+    def test_validate_story_grounding_rejects_scene_drift(self):
+        with self.assertRaises(ValidationError):
+            validate_story_grounding(
+                "A blue house with a red roof, two trees, and two cars under the sun.",
+                "A little girl sat in her bedroom and read quietly beside a lamp before falling asleep.",
+                DEFAULT_CONFIG,
+            )
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):

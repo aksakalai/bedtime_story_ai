@@ -34,7 +34,15 @@ _ANCHOR_STOPWORDS = {
     "by",
     "child",
     "childs",
+    "cloud",
+    "clouds",
+    "calm",
+    "dark",
+    "details",
     "drawing",
+    "edge",
+    "edges",
+    "evening",
     "exact",
     "from",
     "green",
@@ -42,16 +50,33 @@ _ANCHOR_STOPWORDS = {
     "is",
     "it",
     "its",
+    "light",
+    "lights",
+    "line",
+    "lines",
+    "little",
+    "morning",
     "of",
     "on",
     "one",
     "or",
+    "outside",
+    "picture",
+    "pictured",
     "red",
+    "scene",
+    "setting",
+    "small",
+    "sky",
+    "sunlight",
     "the",
     "this",
     "to",
+    "tops",
     "two",
     "visible",
+    "warm",
+    "weather",
     "white",
     "with",
     "yellow",
@@ -89,6 +114,24 @@ def find_anchor_overlap(description_text: str, story_text: str) -> list[str]:
     return [anchor for anchor in anchors if anchor in story_words]
 
 
+def validate_story_grounding(
+    description_text: str,
+    story_text: str,
+    config: GenerationConfig,
+) -> list[str]:
+    anchors = extract_visual_anchor_words(description_text)
+    if not anchors:
+        return []
+    overlap = find_anchor_overlap(description_text, story_text)
+    required_overlap = min(config.min_story_anchor_overlap, len(anchors))
+    if len(overlap) < required_overlap:
+        raise ValidationError(
+            "Story part drifted away from the drawing details. "
+            f"Expected at least {required_overlap} anchor words from the description, got {len(overlap)}."
+        )
+    return overlap
+
+
 def build_description_prompt(config: GenerationConfig) -> str:
     return config.description_prompt_prefix
 
@@ -99,6 +142,7 @@ def build_story_part_prompt(
     step_name: str,
     previous_parts: list[str],
 ) -> str:
+    visual_anchors = extract_visual_anchor_words(description_text)
     step_instructions = {
         "part_1": (
             "Write the beginning of a three-part bedtime story."
@@ -144,6 +188,9 @@ def build_story_part_prompt(
         Drawing description:
         {description_text}
 
+        Required visual anchors:
+        {", ".join(visual_anchors) if visual_anchors else "Use the main visible objects from the description."}
+
         {story_so_far_block}Task:
         {step_instructions[step_name]}
 
@@ -153,9 +200,11 @@ def build_story_part_prompt(
         - Do not explain anything.
         - Do not label the part.
         - Do not mention being an AI or assistant.
+        - The story must take place in the exact pictured scene described above.
         - Stay grounded in the drawing description and use concrete visual details from it.
         - Use at least three concrete details from the drawing description in this paragraph whenever natural.
         - Keep the same major objects and setting consistent across all three parts.
+        - Keep the action physically near the pictured objects instead of moving to a different place.
         - Do not introduce a new place, weather pattern, or major object that is not supported by the drawing description.
         - Keep the full arc clear: setup in part 1, event in part 2, conclusion in part 3.
         - Keep the tone warm, gentle, and bedtime-friendly.

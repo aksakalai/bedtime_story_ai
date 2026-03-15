@@ -13,6 +13,7 @@ from .prompts import (
     find_anchor_overlap,
     normalize_text,
     validate_description_text,
+    validate_story_grounding,
     validate_story_part_text,
 )
 from .providers import Qwen2VLImageDescriber, QwenStoryWriter
@@ -107,9 +108,9 @@ class KidStoryPipeline:
                 raw_output = writer.generate_part(prompt_text)
                 output_text = validate_story_part_text(raw_output, self.config)
                 output_text = normalize_text(output_text)
+                anchor_overlap = validate_story_grounding(description_text, output_text, self.config)
                 write_text(output_path, output_text)
                 ends_cleanly = output_text.rstrip("\"')]} ").endswith((".", "!", "?"))
-                anchor_overlap = find_anchor_overlap(description_text, output_text)
                 print(
                     f"[pipeline] {step_name} stats: "
                     f"words={len(output_text.split())}, "
