@@ -3,6 +3,7 @@ import unittest
 from story_app.config import DEFAULT_CONFIG
 from story_app.prompts import (
     build_description_prompt,
+    build_story_messages,
     build_story_part_prompt,
     validate_description_text,
     validate_story_part_text,
@@ -35,12 +36,11 @@ class PromptTests(unittest.TestCase):
             step_name="part_2",
             previous_parts=["The rabbit padded softly toward the quiet water under the moon."],
         )
-        self.assertIn("Accepted story so far:", prompt)
-        self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
         self.assertIn("middle of the same story", prompt)
         self.assertIn("specific gentle event", prompt)
         self.assertIn("directly involve something clearly visible in the drawing", prompt)
         self.assertIn("continue using the uniquely identifiable details", prompt)
+        self.assertIn("Do not repeat or summarize the previous part.", prompt)
 
     def test_build_story_part_3_prompt_includes_part_1_and_part_2(self):
         prompt = build_story_part_prompt(
@@ -51,8 +51,6 @@ class PromptTests(unittest.TestCase):
                 "He watched silver ripples drift across the pond and listened to the reeds.",
             ],
         )
-        self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
-        self.assertIn("2. He watched silver ripples drift across the pond and listened to the reeds.", prompt)
         self.assertIn("ending of the same story", prompt)
         self.assertIn("resolve the gentle event", prompt.lower())
         self.assertIn("Do not start a new event.", prompt)
@@ -61,6 +59,39 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Stop immediately after the paragraph.", prompt)
         self.assertIn("The story must take place in the exact pictured scene", prompt)
         self.assertIn("uniquely identifiable details from the drawing description", prompt)
+        self.assertIn("Do not repeat or summarize the previous part.", prompt)
+
+    def test_build_story_messages_for_part_2_uses_prior_assistant_turn(self):
+        messages = build_story_messages(
+            description_text="A rabbit stands by a moonlit pond.",
+            step_name="part_2",
+            previous_parts=["The rabbit padded softly toward the quiet water under the moon."],
+        )
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertEqual(messages[1]["role"], "user")
+        self.assertEqual(messages[2]["role"], "assistant")
+        self.assertEqual(messages[2]["content"], "The rabbit padded softly toward the quiet water under the moon.")
+        self.assertEqual(messages[3]["role"], "user")
+
+    def test_build_story_messages_for_part_3_includes_both_previous_parts(self):
+        messages = build_story_messages(
+            description_text="A rabbit stands by a moonlit pond.",
+            step_name="part_3",
+            previous_parts=[
+                "The rabbit padded softly toward the quiet water under the moon.",
+                "He watched silver ripples drift across the pond and listened to the reeds.",
+            ],
+        )
+        assistant_messages = [message for message in messages if message["role"] == "assistant"]
+        self.assertEqual(len(assistant_messages), 2)
+        self.assertEqual(
+            assistant_messages[0]["content"],
+            "The rabbit padded softly toward the quiet water under the moon.",
+        )
+        self.assertEqual(
+            assistant_messages[1]["content"],
+            "He watched silver ripples drift across the pond and listened to the reeds.",
+        )
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):

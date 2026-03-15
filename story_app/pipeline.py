@@ -8,6 +8,7 @@ from .assets import prepare_run_paths, write_text
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
     build_description_prompt,
+    build_story_messages,
     build_story_part_prompt,
     normalize_text,
     validate_description_text,
@@ -100,7 +101,12 @@ class KidStoryPipeline:
                 write_text(prompt_path, prompt_text)
                 print(f"[pipeline] {step_name} prompt saved: {prompt_path}")
 
-                raw_output = writer.generate_part(prompt_text)
+                messages = build_story_messages(
+                    description_text=description_text,
+                    step_name=step_name,
+                    previous_parts=previous_parts,
+                )
+                raw_output = writer.generate_part(messages)
                 output_text = validate_story_part_text(raw_output, self.config)
                 output_text = normalize_text(output_text)
                 write_text(output_path, output_text)

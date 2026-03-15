@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from textwrap import dedent
+from typing import Any
 
 from .config import GenerationConfig
 from .schemas import ValidationError
@@ -47,34 +48,23 @@ def build_story_part_prompt(
         ),
         "part_2": (
             "Write the middle of the same story."
-            " Continue directly from the accepted story so far without restarting it."
+            " Start exactly after the previous part ends."
             " In one short paragraph, let one specific gentle event happen."
             " The event must directly involve something clearly visible in the drawing."
             " Be sure to continue using the uniquely identifiable details from the drawing description."
+            " Do not repeat or summarize the previous part."
         ),
         "part_3": (
             "Write the ending of the same story."
-            " Continue directly from the accepted story so far."
+            " Start exactly after the previous part ends."
             " In one short paragraph, resolve the gentle event and finish with a clear final sentence."
             " Do not start a new event."
             " Keep the ending in the same setting unless the earlier parts already changed it."
+            " Do not repeat or summarize the previous part."
         ),
     }
     if step_name not in step_instructions:
         raise ValidationError(f"Unknown story step: {step_name}")
-
-    story_so_far_block = ""
-    if previous_parts:
-        story_so_far_block = "\n".join(
-            [
-                "Accepted story so far:",
-                *[
-                    f"{index}. {part}"
-                    for index, part in enumerate(previous_parts, start=1)
-                ],
-                "",
-            ]
-        )
 
     return dedent(
         f"""
@@ -83,7 +73,7 @@ def build_story_part_prompt(
         Drawing description:
         {description_text}
 
-        {story_so_far_block}Task:
+        Task:
         {step_instructions[step_name]}
 
         Output rules:
@@ -106,6 +96,59 @@ def build_story_part_prompt(
         Story text:
         """
     ).strip()
+
+
+def build_story_messages(
+    *,
+    description_text: str,
+    step_name: str,
+    previous_parts: list[str],
+) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = [
+        {
+            "role": "system",
+            "content": "You write only clean bedtime-story prose. Follow the user's formatting and length instructions exactly.",
+        }
+    ]
+
+    part_1_prompt = build_story_part_prompt(
+        description_text=description_text,
+        step_name="part_1",
+        previous_parts=[],
+    )
+    messages.append({"role": "user", "content": part_1_prompt})
+
+    if step_name == "part_1":
+        return messages
+
+    if len(previous_parts) >= 1:
+        messages.append({"role": "assistant", "content": previous_parts[0]})
+        messages.append(
+            {
+                "role": "user",
+                "content": build_story_part_prompt(
+                    description_text=description_text,
+                    step_name="part_2",
+                    previous_parts=[previous_parts[0]],
+                ),
+            }
+        )
+    if step_name == "part_2":
+        return messages
+
+    if len(previous_parts) >= 2:
+        messages.append({"role": "assistant", "content": previous_parts[1]})
+        messages.append(
+            {
+                "role": "user",
+                "content": build_story_part_prompt(
+                    description_text=description_text,
+                    step_name="part_3",
+                    previous_parts=previous_parts[:2],
+                ),
+            }
+        )
+    return messages
 
 
 def validate_description_text(raw_text: str, config: GenerationConfig) -> str:
