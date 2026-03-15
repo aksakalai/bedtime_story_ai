@@ -6,7 +6,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class ModelIds:
-    drawing_describer: str = "microsoft/Florence-2-base"
+    drawing_describer: str = "florence-community/Florence-2-base"
     story_writer: str = "Qwen/Qwen2.5-1.5B-Instruct"
     scene_generator: str = "segmind/SSD-1B"
     narrator: str = "hexgrad/Kokoro-82M"

@@ -4,7 +4,6 @@ import gc
 import re
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 from .assets import write_text
 from .config import GenerationConfig
@@ -50,26 +49,18 @@ class FlorenceDrawingDescriber:
             return
 
         import torch
-        from transformers import AutoModelForCausalLM, AutoProcessor
-        from transformers.dynamic_module_utils import get_imports as original_get_imports
+        from transformers import AutoProcessor, Florence2ForConditionalGeneration
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        def florence_get_imports(filename: str) -> list[str]:
-            imports = original_get_imports(filename)
-            if not filename.endswith("modeling_florence2.py"):
-                return imports
-            return [item for item in imports if item != "flash_attn"]
-
-        with patch("transformers.dynamic_module_utils.get_imports", florence_get_imports):
-            self.processor = AutoProcessor.from_pretrained(
-                self.config.models.drawing_describer,
-                trust_remote_code=True,
-            )
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.config.models.drawing_describer,
-                trust_remote_code=True,
-                torch_dtype=_torch_dtype(),
-            )
+        self.processor = AutoProcessor.from_pretrained(
+            self.config.models.drawing_describer,
+            trust_remote_code=False,
+            use_fast=False,
+        )
+        self.model = Florence2ForConditionalGeneration.from_pretrained(
+            self.config.models.drawing_describer,
+            torch_dtype=_torch_dtype(),
+        )
         self.model.to(self.device)
 
     def _generate_text(self, image_path: str | Path, prompt: str, max_new_tokens: int) -> str:
