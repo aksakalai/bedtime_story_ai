@@ -17,7 +17,11 @@ class RunPaths:
     run_dir: Path
     input_image_path: Path
     description_path: Path
+    description_prompt_path: Path
+    description_response_path: Path
     story_path: Path
+    story_prompt_path: Path
+    story_response_path: Path
     timeline_path: Path
     narration_audio_path: Path
     video_path: Path
@@ -55,7 +59,11 @@ def prepare_run_paths(image_source: str | Path, outputs_root: Path) -> RunPaths:
         run_dir=run_dir,
         input_image_path=input_image_path,
         description_path=run_dir / "description.json",
+        description_prompt_path=run_dir / "description_prompt.txt",
+        description_response_path=run_dir / "description_response.txt",
         story_path=run_dir / "story.json",
+        story_prompt_path=run_dir / "story_prompt.txt",
+        story_response_path=run_dir / "story_response.txt",
         timeline_path=run_dir / "timeline.json",
         narration_audio_path=audio_dir / "story_narration.wav",
         video_path=video_dir / "story_video.mp4",
@@ -70,13 +78,21 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
 
 
+def write_text(path: Path, payload: str) -> None:
+    path.write_text(payload, encoding="utf-8")
+
+
 def build_run_manifest(run_paths: RunPaths, story: StoryPackage) -> RunManifest:
     return RunManifest(
         run_id=run_paths.run_id,
         run_dir=str(run_paths.run_dir.resolve()),
         input_image_path=str(run_paths.input_image_path.resolve()),
         description_path=str(run_paths.description_path.resolve()),
+        description_prompt_path=str(run_paths.description_prompt_path.resolve()),
+        description_response_path=str(run_paths.description_response_path.resolve()),
         story_path=str(run_paths.story_path.resolve()),
+        story_prompt_path=str(run_paths.story_prompt_path.resolve()),
+        story_response_path=str(run_paths.story_response_path.resolve()),
         timeline_path=str(run_paths.timeline_path.resolve()),
         narration_audio_path=str(run_paths.narration_audio_path.resolve()),
         video_path=str(run_paths.video_path.resolve()),

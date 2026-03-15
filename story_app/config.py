@@ -17,10 +17,10 @@ class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     image_width: int = 768
     image_height: int = 768
-    diffusion_steps: int = 28
-    guidance_scale: float = 6.5
-    story_max_tokens: int = 500
-    description_max_tokens: int = 280
+    diffusion_steps: int = 16
+    guidance_scale: float = 9.0
+    story_max_tokens: int = 280
+    description_max_tokens: int = 160
     narrator_voice: str = "af_heart"
     narrator_speed: float = 0.96
     random_seed: int = 42

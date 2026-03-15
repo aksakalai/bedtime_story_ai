@@ -8,7 +8,7 @@ import gradio as gr
 from .pipeline import KidStoryPipeline
 from .schemas import StoryPackage
 
-APP_BUILD = "video-v3-20260315"
+APP_BUILD = "deterministic-v1-20260315"
 
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
@@ -113,7 +113,7 @@ INTRO_HTML = """
 <div class="hero-card">
   <h1>Kid Drawing to Bedtime Story</h1>
   <p>Upload one drawing and the app will turn it into a calm three-part bedtime story, three matching illustrations, spoken narration, and one final story video with built-in playback controls.</p>
-  <p><strong>Build:</strong> video-v3-20260315</p>
+  <p><strong>Build:</strong> deterministic-v1-20260315</p>
 </div>
 """
 
@@ -150,7 +150,11 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
     if not image_path:
         raise gr.Error("Upload a drawing before starting the story pipeline.")
 
-    result = _PIPELINE.create_story(image_path, progress_callback=_progress_adapter(progress))
+    try:
+        result = _PIPELINE.create_story(image_path, progress_callback=_progress_adapter(progress))
+    except Exception as exc:
+        raise gr.Error(str(exc)) from exc
+
     status = (
         f"Created run `{result.run_id}`.\n\n"
         f"Saved assets to `{result.run_dir}` and wrote the manifest to `{result.manifest_path}`."

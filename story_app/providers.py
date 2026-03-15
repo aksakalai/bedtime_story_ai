@@ -5,10 +5,16 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .assets import write_text
 from .config import GenerationConfig
-from .json_utils import extract_json_payload, parse_json_response
-from .prompts import build_description_prompt, build_story_prompt, enrich_story_with_image_prompts
-from .schemas import DrawingDescription, SchemaError, StoryPackage, StoryPart
+from .prompts import (
+    build_description_prompt,
+    build_story_prompt,
+    enrich_story_with_image_prompts,
+    parse_description_response,
+    parse_story_response,
+)
+from .schemas import DrawingDescription, StoryPackage, StoryPart
 
 
 def _clear_torch_memory() -> None:
@@ -27,89 +33,9 @@ def _torch_dtype():
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-def _clean_model_text(raw_text: str) -> str:
-    text = raw_text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z0-9_-]*\n?", "", text)
-        text = re.sub(r"\n?```$", "", text)
-    text = re.sub(r"^(assistant|response)\s*:\s*", "", text, flags=re.IGNORECASE)
-    return text.strip()
-
-
-def _parse_text_list(raw_text: str, max_items: int) -> list[str]:
-    text = _clean_model_text(raw_text)
-    if ":" in text:
-        text = text.split(":", 1)[1].strip()
-    text = text.replace("\n", ",")
-    parts = re.split(r"[,;|•]", text)
-    items: list[str] = []
-    for part in parts:
-        cleaned = re.sub(r"^\s*[-*0-9.)]+\s*", "", part).strip(" .")
-        if not cleaned:
-            continue
-        lowered = cleaned.lower()
-        if lowered in {"none", "n/a", "not sure", "unknown"}:
-            continue
-        if cleaned not in items:
-            items.append(cleaned)
-        if len(items) >= max_items:
-            break
-    return items
-
-
-def _parse_single_line(raw_text: str, fallback: str) -> str:
-    text = _clean_model_text(raw_text)
-    if ":" in text:
-        text = text.split(":", 1)[1].strip()
-    line = next((line.strip(" -.") for line in text.splitlines() if line.strip()), "")
-    return line or fallback
-
-
-def _parse_summary_text(raw_text: str, fallback: str) -> str:
-    text = _clean_model_text(raw_text)
-    text = re.sub(r"\s+", " ", text).strip()
-    if not text:
-        return fallback
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-    return " ".join(sentences[:2]).strip()
-
-
 def _preview_text(raw_text: str, limit: int = 600) -> str:
-    text = _clean_model_text(raw_text).replace("\n", " ")
+    text = re.sub(r"\s+", " ", raw_text).strip()
     return text[:limit] + ("..." if len(text) > limit else "")
-
-
-def _split_story_into_three_parts(raw_text: str) -> list[str]:
-    clean_text = _clean_model_text(raw_text)
-    if not clean_text:
-        return []
-
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", clean_text) if part.strip()]
-    source_chunks = paragraphs
-    if len(source_chunks) < 3:
-        sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", clean_text) if sentence.strip()]
-        source_chunks = sentences or [clean_text]
-
-    buckets = [[] for _ in range(3)]
-    for index, chunk in enumerate(source_chunks):
-        bucket_index = min(index * 3 // len(source_chunks), 2)
-        buckets[bucket_index].append(chunk)
-
-    segments = [" ".join(bucket).strip() for bucket in buckets if bucket]
-    if not segments:
-        return []
-    while len(segments) < 3:
-        segments.append(segments[-1])
-    if len(segments) > 3:
-        segments = segments[:2] + [" ".join(segments[2:]).strip()]
-    return segments[:3]
-
-
-def _sentence_case(text: str) -> str:
-    cleaned = re.sub(r"\s+", " ", text).strip(" .")
-    if not cleaned:
-        return ""
-    return cleaned[0].upper() + cleaned[1:]
 
 
 class SmolVLMDescriber:
@@ -139,7 +65,7 @@ class SmolVLMDescriber:
         self.processor = AutoProcessor.from_pretrained(self.config.models.drawing_describer)
         self.model = model_cls.from_pretrained(
             self.config.models.drawing_describer,
-            dtype=_torch_dtype(),
+            torch_dtype=_torch_dtype(),
         )
         self.model.to(self.device)
 
@@ -181,93 +107,26 @@ class SmolVLMDescriber:
         completion = generated_ids[:, prompt_length:]
         return self.processor.batch_decode(completion, skip_special_tokens=True)[0]
 
-    def _describe_fieldwise(self, image_path: str | Path) -> DrawingDescription:
-        summary = _parse_summary_text(
-            self._generate_text(
-                image_path,
-                (
-                    "Describe this child's drawing in 1 or 2 gentle bedtime-story sentences. "
-                    "Mention the main character, setting, mood, and key visual details."
-                ),
-                max_new_tokens=120,
-            ),
-            fallback="A child-friendly drawing with a gentle bedtime-story mood.",
-        )
-        characters = _parse_text_list(
-            self._generate_text(
-                image_path,
-                "List the main characters or important objects as a short comma-separated list. Max 5 items.",
-                max_new_tokens=60,
-            ),
-            max_items=5,
-        ) or ["main child-drawn character"]
-        setting = _parse_single_line(
-            self._generate_text(
-                image_path,
-                "Describe the setting in one short phrase.",
-                max_new_tokens=40,
-            ),
-            fallback="a cozy imaginative setting",
-        )
-        visual_style = _parse_single_line(
-            self._generate_text(
-                image_path,
-                "Describe the art style or medium in one short phrase.",
-                max_new_tokens=40,
-            ),
-            fallback="child-made storybook drawing",
-        )
-        color_palette = _parse_text_list(
-            self._generate_text(
-                image_path,
-                "List the main colors in the drawing as a short comma-separated list. Max 6 items.",
-                max_new_tokens=40,
-            ),
-            max_items=6,
-        ) or ["soft mixed colors"]
-        safety_notes = _parse_text_list(
-            self._generate_text(
-                image_path,
-                (
-                    "Give 3 short bedtime-safety guidance notes for turning this drawing into a story. "
-                    "Use a comma-separated list."
-                ),
-                max_new_tokens=60,
-            ),
-            max_items=3,
-        ) or [
-            "keep the tone gentle",
-            "avoid scary or intense conflict",
-            "end with calm reassurance",
-        ]
-
-        return DrawingDescription(
-            summary=summary,
-            characters=characters,
-            setting=setting,
-            visual_style=visual_style,
-            color_palette=color_palette,
-            safety_notes=safety_notes,
-        )
-
-    def describe(self, image_path: str | Path, attempt_index: int = 0) -> DrawingDescription:
+    def describe(
+        self,
+        image_path: str | Path,
+        prompt_path: Path | None = None,
+        response_path: Path | None = None,
+    ) -> DrawingDescription:
         prompt = build_description_prompt(self.config)
-        if attempt_index:
-            prompt += "\nPrevious output was invalid. Return only valid JSON with the required keys."
+        if prompt_path is not None:
+            write_text(prompt_path, prompt)
 
         raw_text = self._generate_text(
             image_path,
             prompt,
             max_new_tokens=self.config.description_max_tokens,
         )
-        try:
-            return parse_json_response(raw_text, DrawingDescription)
-        except Exception:
-            print(
-                f"[describe] Attempt {attempt_index + 1} returned non-JSON output. "
-                f"Preview: {_preview_text(raw_text)}"
-            )
-            return self._describe_fieldwise(image_path)
+        if response_path is not None:
+            write_text(response_path, raw_text)
+
+        print(f"[describe] Raw preview: {_preview_text(raw_text)}")
+        return parse_description_response(raw_text)
 
     def unload(self) -> None:
         self.model = None
@@ -317,147 +176,24 @@ class QwenStoryWriter:
         except StopIteration:
             self.input_device = "cpu"
 
-    def _coerce_story_package(self, raw_text: str, description: DrawingDescription) -> StoryPackage:
-        try:
-            payload = extract_json_payload(raw_text)
-        except SchemaError:
-            payload = {}
-
-        title = str(payload.get("title") or f"{description.characters[0].title()} Bedtime Story").strip()
-        if not title:
-            title = "Bedtime Story"
-        age_range = str(payload.get("age_range") or self.config.age_range).strip() or self.config.age_range
-
-        candidate_parts: list[dict[str, str]] = []
-        parts_value = payload.get("parts")
-        if isinstance(parts_value, dict):
-            ordered_keys = sorted(parts_value.keys())
-            parts_value = [parts_value[key] for key in ordered_keys]
-
-        if isinstance(parts_value, list):
-            for part in parts_value:
-                if not isinstance(part, dict):
-                    continue
-                story_text = str(
-                    part.get("story_text")
-                    or part.get("text")
-                    or part.get("content")
-                    or ""
-                ).strip()
-                if not story_text:
-                    continue
-                candidate_parts.append(
-                    {
-                        "scene_goal": str(part.get("scene_goal") or part.get("scene") or "").strip(),
-                        "story_text": story_text,
-                    }
-                )
-        elif isinstance(payload, dict):
-            for key in sorted(payload.keys()):
-                lowered = key.lower()
-                if lowered in {"part1", "part_1", "part2", "part_2", "part3", "part_3", "beginning", "middle", "ending"}:
-                    value = payload[key]
-                    if isinstance(value, dict):
-                        story_text = str(
-                            value.get("story_text")
-                            or value.get("text")
-                            or value.get("content")
-                            or value.get("summary")
-                            or ""
-                        ).strip()
-                        scene_goal = str(value.get("scene_goal") or key).strip()
-                    else:
-                        story_text = str(value).strip()
-                        scene_goal = key
-                    if story_text:
-                        candidate_parts.append({"scene_goal": scene_goal, "story_text": story_text})
-
-        if candidate_parts:
-            combined_text = "\n\n".join(part["story_text"] for part in candidate_parts)
-        else:
-            combined_text = str(
-                payload.get("story")
-                or payload.get("story_text")
-                or payload.get("summary")
-                or raw_text
-            )
-
-        story_chunks = _split_story_into_three_parts(combined_text)
-        if not story_chunks:
-            raise SchemaError("Could not coerce model output into three story parts.")
-
-        default_goals = ["gentle beginning", "cozy middle", "sleepy ending"]
-        normalized_parts: list[StoryPart] = []
-        for index, story_text in enumerate(story_chunks):
-            scene_goal = default_goals[index]
-            if index < len(candidate_parts) and candidate_parts[index].get("scene_goal"):
-                scene_goal = candidate_parts[index]["scene_goal"]
-            normalized_parts.append(
-                StoryPart(
-                    scene_goal=scene_goal,
-                    story_text=story_text,
-                )
-            )
-
-        return StoryPackage(
-            title=title,
-            age_range=age_range,
-            parts=normalized_parts,
-        )
-
-    def _build_story_fallback(self, description: DrawingDescription) -> StoryPackage:
-        lead_character = description.characters[0] if description.characters else "a little dreamer"
-        second_character = description.characters[1] if len(description.characters) > 1 else lead_character
-        setting = _sentence_case(description.setting) or "A cozy bedtime place"
-        color_phrase = ", ".join(description.color_palette[:3]) or "soft bedtime colors"
-        title_word = re.sub(r"[^A-Za-z0-9 ]+", "", lead_character).strip().title() or "Dream"
-
-        parts = [
-            StoryPart(
-                scene_goal="gentle beginning",
-                story_text=(
-                    f"{lead_character.title()} looked at {setting.lower()} and imagined a quiet adventure beginning there. "
-                    f"The air felt calm, the colors of {color_phrase} shimmered softly, and every little detail seemed ready "
-                    f"for a kind bedtime story. With a happy breath, {lead_character} took the first small step into the dream."
-                ),
-            ),
-            StoryPart(
-                scene_goal="cozy middle",
-                story_text=(
-                    f"Soon, {lead_character} met {second_character} and the two explored together at a slow, peaceful pace. "
-                    f"They noticed friendly shapes, warm lights, and gentle surprises all around them. Nothing felt scary or loud. "
-                    f"Instead, the whole world seemed to whisper that nighttime was for wonder, comfort, and feeling safe."
-                ),
-            ),
-            StoryPart(
-                scene_goal="sleepy ending",
-                story_text=(
-                    f"At last, the adventure grew quieter and softer until everything felt ready for rest. "
-                    f"{lead_character.title()} smiled, carried the sweetest part of the journey close, and settled into the calm night. "
-                    f"With the peaceful scene glowing nearby, the story ended in a warm, sleepy hush that felt just right for bedtime."
-                ),
-            ),
-        ]
-
-        return StoryPackage(
-            title=f"{title_word} and the Dreamy Night",
-            age_range=self.config.age_range,
-            parts=parts,
-        )
-
-    def write_story(self, description: DrawingDescription, attempt_index: int = 0) -> StoryPackage:
+    def write_story(
+        self,
+        description: DrawingDescription,
+        prompt_path: Path | None = None,
+        response_path: Path | None = None,
+    ) -> StoryPackage:
         self._load()
         assert self.tokenizer is not None
         assert self.model is not None
 
         prompt = build_story_prompt(description, self.config)
-        if attempt_index:
-            prompt += "\nThe previous response was invalid. Return one valid JSON object only."
+        if prompt_path is not None:
+            write_text(prompt_path, prompt)
 
         messages = [
             {
                 "role": "system",
-                "content": "You are a careful bedtime story writer who follows output schemas exactly.",
+                "content": "You follow label formats exactly. Never use JSON or extra commentary.",
             },
             {"role": "user", "content": prompt},
         ]
@@ -475,25 +211,16 @@ class QwenStoryWriter:
         output_ids = self.model.generate(
             **inputs,
             max_new_tokens=self.config.story_max_tokens,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.92,
+            do_sample=False,
             pad_token_id=self.tokenizer.eos_token_id,
         )
         prompt_length = inputs["input_ids"].shape[1]
         raw_text = self.tokenizer.decode(output_ids[0][prompt_length:], skip_special_tokens=True)
-        print(f"[story] Attempt {attempt_index + 1} raw preview: {_preview_text(raw_text)}")
-        try:
-            story = parse_json_response(raw_text, StoryPackage)
-        except Exception as error:
-            print(f"[story] Attempt {attempt_index + 1} schema mismatch: {error}")
-            try:
-                story = self._coerce_story_package(raw_text, description)
-                print(f"[story] Attempt {attempt_index + 1} coerced output into 3 parts.")
-            except Exception as coercion_error:
-                print(f"[story] Attempt {attempt_index + 1} coercion failed: {coercion_error}")
-                story = self._build_story_fallback(description)
-                print(f"[story] Attempt {attempt_index + 1} used deterministic fallback story.")
+        if response_path is not None:
+            write_text(response_path, raw_text)
+
+        print(f"[story] Raw preview: {_preview_text(raw_text)}")
+        story = parse_story_response(raw_text, self.config)
         return enrich_story_with_image_prompts(story, description, self.config)
 
     def unload(self) -> None:
@@ -531,10 +258,7 @@ class SSD1BSceneGenerator:
         if hasattr(self.pipeline, "vae") and hasattr(self.pipeline.vae, "enable_slicing"):
             self.pipeline.vae.enable_slicing()
 
-        if self.device == "cuda":
-            self.pipeline = self.pipeline.to(self.device)
-        else:
-            self.pipeline = self.pipeline.to("cpu")
+        self.pipeline = self.pipeline.to(self.device)
 
     def generate(self, story: StoryPackage, images_dir: Path) -> StoryPackage:
         self._load()
@@ -542,11 +266,14 @@ class SSD1BSceneGenerator:
 
         import torch
 
+        if len(story.parts) != 3:
+            raise RuntimeError("Scene generation requires exactly 3 story parts.")
+
         updated_parts: list[StoryPart] = []
         for index, part in enumerate(story.parts, start=1):
-            generator = None
-            if self.device == "cuda":
-                generator = torch.Generator(device=self.device).manual_seed(self.config.random_seed + index)
+            generator = torch.Generator(device=self.device).manual_seed(
+                self.config.random_seed + index
+            )
 
             result = self.pipeline(
                 prompt=part.image_prompt,
@@ -587,7 +314,6 @@ class KokoroNarrator:
 
         from kokoro import KPipeline
 
-        # KPipeline wraps the Kokoro-82M voice model and downloads assets as needed.
         self.pipeline = KPipeline(lang_code="a")
 
     def narrate(self, story: StoryPackage, audio_dir: Path, merged_audio_path: Path) -> StoryPackage:
@@ -596,6 +322,9 @@ class KokoroNarrator:
 
         import numpy as np
         import soundfile as sf
+
+        if len(story.parts) != 3:
+            raise RuntimeError("Narration requires exactly 3 story parts.")
 
         sample_rate = 24000
         merged_segments: list[Any] = []
@@ -616,7 +345,6 @@ class KokoroNarrator:
             audio_path = audio_dir / f"part_{index}.wav"
             sf.write(audio_path, audio, sample_rate)
             duration_sec = len(audio) / sample_rate
-            merged_segments.append(audio)
             updated_parts.append(
                 StoryPart(
                     scene_goal=part.scene_goal,
@@ -627,6 +355,7 @@ class KokoroNarrator:
                     duration_sec=round(duration_sec, 3),
                 )
             )
+            merged_segments.append(audio)
 
         merged_audio = np.concatenate(merged_segments).astype("float32")
         sf.write(merged_audio_path, merged_audio, sample_rate)

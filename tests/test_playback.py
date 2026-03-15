@@ -12,8 +12,8 @@ class PlaybackTests(unittest.TestCase):
             title="Bedtime on the Hill",
             age_range="5-10",
             parts=[
-                StoryPart("intro", "The rabbit watched the sky turn peach.", image_path="/tmp/scene1.png", duration_sec=1.2),
-                StoryPart("middle", "A sleepy owl hummed from a branch.", image_path="/tmp/scene2.png", duration_sec=2.3),
+                StoryPart("entrance", "The rabbit watched the sky turn peach.", image_path="/tmp/scene1.png", duration_sec=1.2),
+                StoryPart("buildup", "A sleepy owl hummed from a branch.", image_path="/tmp/scene2.png", duration_sec=2.3),
                 StoryPart("ending", "The hill tucked everyone into moonlight.", image_path="/tmp/scene3.png", duration_sec=3.4),
             ],
         )

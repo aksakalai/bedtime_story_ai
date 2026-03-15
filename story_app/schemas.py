@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+EXPECTED_SCENE_GOALS = ("entrance", "buildup", "ending")
+
 
 class SchemaError(ValueError):
     """Raised when structured model output cannot be validated."""
@@ -86,6 +88,11 @@ class StoryPackage:
         parts = [StoryPart.from_dict(part) for part in parts_raw]
         if len(parts) != 3:
             raise SchemaError("StoryPackage must contain exactly 3 parts.")
+        for expected_goal, part in zip(EXPECTED_SCENE_GOALS, parts):
+            if part.scene_goal != expected_goal:
+                raise SchemaError(
+                    f"StoryPackage scene goals must be {', '.join(EXPECTED_SCENE_GOALS)} in order."
+                )
         return cls(
             title=_ensure_string(data.get("title"), "title"),
             age_range=_ensure_string(data.get("age_range"), "age_range"),
@@ -132,7 +139,11 @@ class RunManifest:
     run_dir: str
     input_image_path: str
     description_path: str
+    description_prompt_path: str
+    description_response_path: str
     story_path: str
+    story_prompt_path: str
+    story_response_path: str
     timeline_path: str
     narration_audio_path: str
     video_path: str
