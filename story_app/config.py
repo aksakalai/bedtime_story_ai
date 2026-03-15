@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-story-drafting-v5-20260315"
+APP_BUILD = "phase1-story-drafting-v6-20260315"
 
 
 @dataclass(frozen=True)
@@ -17,17 +17,17 @@ class ModelIds:
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     description_prompt_prefix: str = (
-        "Describe the visible scene in one rich, precise paragraph. Include as many directly visible, uniquely "
-        "identifiable details as possible that a story writer could later reuse faithfully: main objects, characters "
-        "or animals if present, colors, counts, clothing, facial expressions, relative positions, foreground and "
-        "background elements, notable shapes, markings, patterns, and anything visually distinctive. Be concrete and "
-        "specific. Prefer exact scene details over broad summaries. Use simple spatial wording such as left, right, "
-        "above, below, beside, behind, or in front of when helpful. Do not mention the image itself, the medium, the "
-        "artist, style, composition, symbolism, or your opinion. Do not infer hidden actions, relationships, "
-        "backstory, or story events. If a detail is not clearly visible, leave it out."
+        "Describe the visible scene in one concise, factual paragraph. Include only directly visible, uniquely "
+        "identifiable details that a story writer could reuse exactly: objects, characters or animals if present, "
+        "colors, counts, clothing, facial expressions, relative positions, foreground and background elements, and "
+        "clear markings or shapes. Be concrete and specific. Prefer exact visible facts over atmosphere or summary. "
+        "Use simple spatial wording such as left, right, above, below, beside, behind, or in front of when helpful. "
+        "Do not mention the image itself, the medium, the artist, style, composition, symbolism, or your opinion. Do "
+        "not infer hidden actions, relationships, backstory, or story events. If a detail is not clearly visible, "
+        "leave it out."
     )
-    description_max_tokens: int = 384
-    story_part_max_tokens: int = 256
+    description_max_tokens: int = 192
+    story_part_max_tokens: int = 112
     min_description_words: int = 10
     min_story_part_words: int = 1
     random_seed: int = 42
