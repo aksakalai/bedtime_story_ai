@@ -4,6 +4,8 @@ from story_app.config import DEFAULT_CONFIG
 from story_app.prompts import (
     build_description_prompt,
     build_story_part_prompt,
+    extract_visual_anchor_words,
+    find_anchor_overlap,
     validate_description_text,
     validate_story_part_text,
 )
@@ -25,6 +27,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("A rabbit stands by a moonlit pond.", prompt)
         self.assertIn("beginning of a three-part bedtime story", prompt)
         self.assertIn("calm starting situation", prompt)
+        self.assertIn("invent only one gentle main character", prompt)
         self.assertNotIn("Accepted story so far:", prompt)
 
     def test_build_story_part_2_prompt_includes_part_1_exactly(self):
@@ -37,6 +40,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
         self.assertIn("middle of the same story", prompt)
         self.assertIn("specific gentle event", prompt)
+        self.assertIn("directly involve something clearly visible in the drawing", prompt)
 
     def test_build_story_part_3_prompt_includes_part_1_and_part_2(self):
         prompt = build_story_part_prompt(
@@ -52,8 +56,28 @@ class PromptTests(unittest.TestCase):
         self.assertIn("ending of the same story", prompt)
         self.assertIn("resolve the gentle event", prompt.lower())
         self.assertIn("Do not start a new event.", prompt)
+        self.assertIn("same setting unless the earlier parts already changed it", prompt)
         self.assertIn("End with a complete sentence.", prompt)
         self.assertIn("Stop immediately after the paragraph.", prompt)
+        self.assertIn("Use at least three concrete details", prompt)
+
+    def test_extract_visual_anchor_words_prefers_visual_nouns(self):
+        anchors = extract_visual_anchor_words(
+            "A child's drawing of a blue house with a red roof and two brown trees with green tops and two blue cars."
+        )
+        self.assertIn("house", anchors)
+        self.assertIn("roof", anchors)
+        self.assertIn("trees", anchors)
+        self.assertIn("cars", anchors)
+
+    def test_find_anchor_overlap_reports_grounded_words(self):
+        overlap = find_anchor_overlap(
+            "A blue house with two trees and two cars under a yellow sun.",
+            "A child walked past the house and trees while the sun warmed the cars.",
+        )
+        self.assertIn("house", overlap)
+        self.assertIn("trees", overlap)
+        self.assertIn("cars", overlap)
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):

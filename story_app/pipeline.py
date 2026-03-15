@@ -9,6 +9,8 @@ from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
     build_description_prompt,
     build_story_part_prompt,
+    extract_visual_anchor_words,
+    find_anchor_overlap,
     normalize_text,
     validate_description_text,
     validate_story_part_text,
@@ -67,12 +69,14 @@ class KidStoryPipeline:
         finally:
             describer.unload()
         write_text(run_paths.description_path, description_text)
+        description_anchors = extract_visual_anchor_words(description_text)
         description = DescriptionResult(
             image_path=str(run_paths.input_image_path.resolve()),
             prompt_text=description_prompt,
             description_text=description_text,
         )
         print(f"[pipeline] Description: {description_text}")
+        print(f"[pipeline] Description anchors: {description_anchors}")
 
         self._notify(progress_callback, 0.22, "Generating the three story parts")
         writer = self.writer_factory(self.config)
@@ -105,11 +109,13 @@ class KidStoryPipeline:
                 output_text = normalize_text(output_text)
                 write_text(output_path, output_text)
                 ends_cleanly = output_text.rstrip("\"')]} ").endswith((".", "!", "?"))
+                anchor_overlap = find_anchor_overlap(description_text, output_text)
                 print(
                     f"[pipeline] {step_name} stats: "
                     f"words={len(output_text.split())}, "
                     f"chars={len(output_text)}, "
-                    f"ends_cleanly={ends_cleanly}"
+                    f"ends_cleanly={ends_cleanly}, "
+                    f"anchor_overlap={anchor_overlap}"
                 )
                 print(f"[pipeline] {step_name} output: {output_text}")
                 steps.append(

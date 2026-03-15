@@ -20,12 +20,73 @@ _META_PREFIX_PATTERNS = (
     r"^story\s*:",
 )
 
+_ANCHOR_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "black",
+    "blue",
+    "brown",
+    "by",
+    "child",
+    "childs",
+    "drawing",
+    "exact",
+    "from",
+    "green",
+    "in",
+    "is",
+    "it",
+    "its",
+    "of",
+    "on",
+    "one",
+    "or",
+    "red",
+    "the",
+    "this",
+    "to",
+    "two",
+    "visible",
+    "white",
+    "with",
+    "yellow",
+}
+
 
 def normalize_text(raw_text: str) -> str:
     text = re.sub(r"\s+", " ", raw_text).strip()
     if not text:
         raise ValidationError("Model output was empty.")
     return text
+
+
+def _tokenize_words(raw_text: str) -> list[str]:
+    return re.findall(r"[a-zA-Z']+", raw_text.lower())
+
+
+def extract_visual_anchor_words(description_text: str, max_words: int = 8) -> list[str]:
+    anchors: list[str] = []
+    for token in _tokenize_words(description_text):
+        if len(token) < 3:
+            continue
+        if token in _ANCHOR_STOPWORDS:
+            continue
+        if token not in anchors:
+            anchors.append(token)
+        if len(anchors) >= max_words:
+            break
+    return anchors
+
+
+def find_anchor_overlap(description_text: str, story_text: str) -> list[str]:
+    anchors = extract_visual_anchor_words(description_text)
+    story_words = set(_tokenize_words(story_text))
+    return [anchor for anchor in anchors if anchor in story_words]
 
 
 def build_description_prompt(config: GenerationConfig) -> str:
@@ -43,17 +104,21 @@ def build_story_part_prompt(
             "Write the beginning of a three-part bedtime story."
             " In one short paragraph, introduce the visible character or characters, the setting,"
             " and the calm starting situation from the drawing."
+            " If no person or animal is visible, invent only one gentle main character and place that"
+            " character inside this exact pictured setting."
         ),
         "part_2": (
             "Write the middle of the same story."
             " Continue directly from the accepted story so far without restarting it."
             " In one short paragraph, let one specific gentle event happen."
+            " The event must directly involve something clearly visible in the drawing."
         ),
         "part_3": (
             "Write the ending of the same story."
             " Continue directly from the accepted story so far."
             " In one short paragraph, resolve the gentle event and finish with a clear final sentence."
             " Do not start a new event."
+            " Keep the ending in the same setting unless the earlier parts already changed it."
         ),
     }
     if step_name not in step_instructions:
@@ -89,6 +154,9 @@ def build_story_part_prompt(
         - Do not label the part.
         - Do not mention being an AI or assistant.
         - Stay grounded in the drawing description and use concrete visual details from it.
+        - Use at least three concrete details from the drawing description in this paragraph whenever natural.
+        - Keep the same major objects and setting consistent across all three parts.
+        - Do not introduce a new place, weather pattern, or major object that is not supported by the drawing description.
         - Keep the full arc clear: setup in part 1, event in part 2, conclusion in part 3.
         - Keep the tone warm, gentle, and bedtime-friendly.
         - Aim for about 45 to 55 words, but finish the paragraph cleanly.
