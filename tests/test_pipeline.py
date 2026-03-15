@@ -1,256 +1,146 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from story_app.config import GenerationConfig
 from story_app.pipeline import KidStoryPipeline
-from story_app.schemas import DrawingDescription, StoryPackage, StoryPart
+from story_app.schemas import ValidationError
 
 
-VALID_DESCRIPTION = DrawingDescription(
-    text="A rabbit stands beside a moonlit pond and listens to the quiet water under silver stars.",
+VALID_DESCRIPTION = (
+    "A gentle drawing of a small house beside two trees and a little car under a calm evening sky."
+)
+VALID_PART_1 = (
+    "A little fox walked past the small house at dusk and noticed the two trees swaying softly nearby while a tiny car rested by the path. The evening felt warm and calm, and the fox slowed down to listen to the quiet sounds of home before night settled in."
+)
+VALID_PART_2 = (
+    "The fox followed the path between the trees and found a patch of glowing fireflies circling the house in patient loops. He watched them drift over the parked car and across the windows, and the whole place felt like a gentle secret waiting to be shared."
+)
+VALID_PART_3 = (
+    "When the stars brightened, the fox curled beside the house and let the fireflies fade into the dark blue sky. The trees stood still, the little car gleamed softly, and the fox closed his eyes, happy to fall asleep in such a peaceful place."
 )
 
 
-def make_valid_story() -> StoryPackage:
-    return StoryPackage(
-        title="Rabbit and the Quiet Pond",
-        age_range="5-10",
-        parts=[
-            StoryPart(
-                scene_goal="entrance",
-                story_text="The rabbit padded to the moonlit pond and felt the quiet night settle into a soft beginning.",
-                image_prompt="entrance prompt",
-            ),
-            StoryPart(
-                scene_goal="buildup",
-                story_text="The moon shimmered on the water while the rabbit noticed reeds, ripples, and the gentle sounds of bedtime.",
-                image_prompt="buildup prompt",
-            ),
-            StoryPart(
-                scene_goal="ending",
-                story_text="The rabbit curled near the pond, watched the silver glow turn sleepy, and rested in a calm dreamy hush.",
-                image_prompt="ending prompt",
-            ),
-        ],
-    )
-
-
-class _BaseFakeDescriber:
+class FakeDescriber:
     def __init__(self, config):
         self.config = config
 
-    def describe(self, image_path, prompt_path=None, response_path=None):
-        if prompt_path is not None:
-            prompt_path.write_text("description prompt", encoding="utf-8")
-        if response_path is not None:
-            response_path.write_text("description response", encoding="utf-8")
+    def describe(self, image_path, prompt_text):
         return VALID_DESCRIPTION
 
     def unload(self):
         return None
 
 
-class _BaseFakeWriter:
+class FakeWriter:
     def __init__(self, config):
         self.config = config
+        self.calls = 0
 
-    def write_story(self, description, prompt_path=None, response_path=None):
-        if prompt_path is not None:
-            prompt_path.write_text("story prompt", encoding="utf-8")
-        if response_path is not None:
-            response_path.write_text("story response", encoding="utf-8")
-        return make_valid_story()
+    def generate_part(self, prompt_text):
+        self.calls += 1
+        if self.calls == 1:
+            return VALID_PART_1
+        if self.calls == 2:
+            return VALID_PART_2
+        return VALID_PART_3
 
     def unload(self):
         return None
 
 
-class _BaseFakeImageGenerator:
+class FailingDescription:
     def __init__(self, config):
         self.config = config
 
-    def generate(self, story, images_dir):
-        updated_parts = []
-        for index, part in enumerate(story.parts, start=1):
-            image_path = images_dir / f"scene_{index}.png"
-            image_path.write_bytes(f"image-{index}".encode("utf-8"))
-            updated_parts.append(
-                StoryPart(
-                    scene_goal=part.scene_goal,
-                    story_text=part.story_text,
-                    image_prompt=part.image_prompt,
-                    image_path=str(image_path.resolve()),
-                    audio_path=part.audio_path,
-                    duration_sec=part.duration_sec,
-                )
-            )
-        return StoryPackage(title=story.title, age_range=story.age_range, parts=updated_parts)
+    def describe(self, image_path, prompt_text):
+        return "```bad```"
 
     def unload(self):
         return None
 
 
-class _BaseFakeNarrator:
+class CountingWriter:
+    instances = []
+
     def __init__(self, config):
         self.config = config
+        self.calls = 0
+        CountingWriter.instances.append(self)
 
-    def narrate(self, story, audio_dir, merged_audio_path):
-        updated_parts = []
-        for index, part in enumerate(story.parts, start=1):
-            audio_path = audio_dir / f"part_{index}.wav"
-            audio_path.write_bytes(f"audio-{index}".encode("utf-8"))
-            updated_parts.append(
-                StoryPart(
-                    scene_goal=part.scene_goal,
-                    story_text=part.story_text,
-                    image_prompt=part.image_prompt,
-                    image_path=part.image_path,
-                    audio_path=str(audio_path.resolve()),
-                    duration_sec=1.5 + index,
-                )
-            )
-        merged_audio_path.write_bytes(b"merged-audio")
-        return StoryPackage(title=story.title, age_range=story.age_range, parts=updated_parts)
+    def generate_part(self, prompt_text):
+        self.calls += 1
+        if self.calls == 1:
+            return VALID_PART_1
+        if self.calls == 2:
+            return "Sure, here is the second part of the story."
+        return VALID_PART_3
 
-
-def _fake_render_story_video(*, output_path, **_kwargs):
-    output_path.write_bytes(b"video")
-    return output_path
+    def unload(self):
+        return None
 
 
 class PipelineTests(unittest.TestCase):
     def _create_input_file(self, root: Path) -> Path:
-        input_path = root / "input.png"
-        input_path.write_bytes(b"not-a-real-image")
-        return input_path
+        path = root / "input.png"
+        path.write_bytes(b"fake-image")
+        return path
 
-    def test_pipeline_stops_before_image_generation_without_three_story_parts(self):
-        class FakeWriter(_BaseFakeWriter):
-            def write_story(self, description, prompt_path=None, response_path=None):
-                super().write_story(description, prompt_path=prompt_path, response_path=response_path)
-                return StoryPackage(
-                    title="Broken Story",
-                    age_range="5-10",
-                    parts=[
-                        StoryPart("entrance", "Only one opening.", image_prompt="p1"),
-                        StoryPart("buildup", "Only two parts.", image_prompt="p2"),
-                    ],
-                )
-
-        class ShouldNotStartImageGenerator:
-            def __init__(self, _config):
-                raise AssertionError("image generation should not start")
+    def test_pipeline_stops_before_part_1_when_description_is_invalid(self):
+        class ShouldNotWrite:
+            def __init__(self, config):
+                raise AssertionError("writer should not be created")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            input_path = self._create_input_file(root)
-            config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
-                "story_app.pipeline.QwenStoryWriter", FakeWriter
-            ), patch("story_app.pipeline.SDTurboSceneGenerator", ShouldNotStartImageGenerator), patch(
-                "story_app.pipeline.KokoroNarrator", _BaseFakeNarrator
-            ):
-                pipeline = KidStoryPipeline(config)
-                with self.assertRaisesRegex(RuntimeError, "exactly 3 story parts"):
-                    pipeline.create_story(input_path)
+            pipeline = KidStoryPipeline(
+                config=GenerationConfig(outputs_root=root / "outputs"),
+                describer_factory=FailingDescription,
+                writer_factory=ShouldNotWrite,
+            )
+            with self.assertRaises(ValidationError):
+                pipeline.create_story_draft(self._create_input_file(root))
 
-    def test_pipeline_stops_before_narration_when_scene_images_missing(self):
-        class FakeImageGenerator(_BaseFakeImageGenerator):
-            def generate(self, story, images_dir):
-                image_path = images_dir / "scene_1.png"
-                image_path.write_bytes(b"image-1")
-                return StoryPackage(
-                    title=story.title,
-                    age_range=story.age_range,
-                    parts=[
-                        StoryPart("entrance", story.parts[0].story_text, image_prompt=story.parts[0].image_prompt, image_path=str(image_path.resolve())),
-                        StoryPart("buildup", story.parts[1].story_text, image_prompt=story.parts[1].image_prompt, image_path=""),
-                        StoryPart("ending", story.parts[2].story_text, image_prompt=story.parts[2].image_prompt, image_path=""),
-                    ],
-                )
-
-        class ShouldNotNarrate(_BaseFakeNarrator):
-            def narrate(self, story, audio_dir, merged_audio_path):
-                raise AssertionError("narration should not start")
-
+    def test_pipeline_stops_before_part_3_when_part_2_is_invalid(self):
+        CountingWriter.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            input_path = self._create_input_file(root)
-            config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
-                "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
-            ), patch("story_app.pipeline.SDTurboSceneGenerator", FakeImageGenerator), patch(
-                "story_app.pipeline.KokoroNarrator", ShouldNotNarrate
-            ):
-                pipeline = KidStoryPipeline(config)
-                with self.assertRaisesRegex(RuntimeError, "Scene generation failed"):
-                    pipeline.create_story(input_path)
+            pipeline = KidStoryPipeline(
+                config=GenerationConfig(outputs_root=root / "outputs"),
+                describer_factory=FakeDescriber,
+                writer_factory=CountingWriter,
+            )
+            with self.assertRaises(ValidationError):
+                pipeline.create_story_draft(self._create_input_file(root))
+            self.assertEqual(CountingWriter.instances[0].calls, 2)
 
-    def test_pipeline_stops_before_video_when_audio_missing(self):
-        class FakeNarrator(_BaseFakeNarrator):
-            def narrate(self, story, audio_dir, merged_audio_path):
-                updated_story = super().narrate(story, audio_dir, merged_audio_path)
-                broken_parts = updated_story.parts[:]
-                broken_parts[1] = StoryPart(
-                    scene_goal=broken_parts[1].scene_goal,
-                    story_text=broken_parts[1].story_text,
-                    image_prompt=broken_parts[1].image_prompt,
-                    image_path=broken_parts[1].image_path,
-                    audio_path="",
-                    duration_sec=0.0,
-                )
-                return StoryPackage(
-                    title=updated_story.title,
-                    age_range=updated_story.age_range,
-                    parts=broken_parts,
-                )
-
-        def should_not_render(**_kwargs):
-            raise AssertionError("video rendering should not start")
-
+    def test_pipeline_smoke_path_saves_all_phase_1_artifacts(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            input_path = self._create_input_file(root)
-            config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
-                "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
-            ), patch("story_app.pipeline.SDTurboSceneGenerator", _BaseFakeImageGenerator), patch(
-                "story_app.pipeline.KokoroNarrator", FakeNarrator
-            ), patch("story_app.pipeline.render_story_video", side_effect=should_not_render):
-                pipeline = KidStoryPipeline(config)
-                with self.assertRaisesRegex(RuntimeError, "Narration failed"):
-                    pipeline.create_story(input_path)
+            pipeline = KidStoryPipeline(
+                config=GenerationConfig(outputs_root=root / "outputs"),
+                describer_factory=FakeDescriber,
+                writer_factory=FakeWriter,
+            )
+            result = pipeline.create_story_draft(self._create_input_file(root))
 
-    def test_pipeline_smoke_path_writes_expected_artifacts(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            input_path = self._create_input_file(root)
-            config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
-                "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
-            ), patch("story_app.pipeline.SDTurboSceneGenerator", _BaseFakeImageGenerator), patch(
-                "story_app.pipeline.KokoroNarrator", _BaseFakeNarrator
-            ), patch("story_app.pipeline.render_story_video", side_effect=_fake_render_story_video):
-                pipeline = KidStoryPipeline(config)
-                result = pipeline.create_story(input_path)
+            self.assertEqual(result.description_text, VALID_DESCRIPTION)
+            self.assertEqual(result.part_1_text, VALID_PART_1)
+            self.assertEqual(result.part_2_text, VALID_PART_2)
+            self.assertEqual(result.part_3_text, VALID_PART_3)
 
-            self.assertEqual(len(result.story.parts), 3)
-            self.assertEqual(len(result.manifest.scene_image_paths), 3)
-            self.assertEqual(len(result.manifest.part_audio_paths), 3)
-            self.assertTrue(Path(result.narration_audio_path).exists())
-            self.assertTrue(Path(result.video_path).exists())
-            self.assertTrue(Path(result.manifest_path).exists())
-
-            manifest_payload = json.loads(Path(result.manifest_path).read_text(encoding="utf-8"))
-            self.assertTrue(Path(manifest_payload["description_prompt_path"]).exists())
-            self.assertTrue(Path(manifest_payload["description_response_path"]).exists())
-            self.assertTrue(Path(manifest_payload["story_prompt_path"]).exists())
-            self.assertTrue(Path(manifest_payload["story_response_path"]).exists())
-            self.assertEqual(len(manifest_payload["scene_image_paths"]), 3)
-            self.assertEqual(len(manifest_payload["part_audio_paths"]), 3)
+            expected_files = [
+                "description_prompt.txt",
+                "description.txt",
+                "story_part_1_prompt.txt",
+                "story_part_1.txt",
+                "story_part_2_prompt.txt",
+                "story_part_2.txt",
+                "story_part_3_prompt.txt",
+                "story_part_3.txt",
+            ]
+            for filename in expected_files:
+                self.assertTrue((result.run_dir / filename).exists(), filename)
 
 
 if __name__ == "__main__":

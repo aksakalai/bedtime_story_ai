@@ -1,119 +1,69 @@
 from __future__ import annotations
 
-import html
 from pathlib import Path
 
 import gradio as gr
 
+from .config import APP_BUILD, DEFAULT_CONFIG
 from .pipeline import KidStoryPipeline
-from .schemas import StoryPackage
-
-APP_BUILD = "deterministic-v3-20260315"
 
 APP_CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
 :root {
-  --paper: #fffaf0;
-  --paper-soft: rgba(255, 250, 240, 0.92);
-  --ink: #1f2933;
-  --muted: #556271;
-  --caramel: #8b5e3c;
-  --gold: #f6cd7a;
-  --sky: #a7d8de;
+  --cream: #f7f1e3;
+  --card: rgba(255, 251, 245, 0.9);
+  --ink: #24303d;
+  --muted: #5d6875;
+  --accent: #b26a3b;
+  --border: rgba(36, 48, 61, 0.12);
 }
 
 .gradio-container {
-  font-family: "DM Sans", sans-serif;
+  font-family: "IBM Plex Sans", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(249, 214, 138, 0.72), transparent 30%),
-    radial-gradient(circle at top right, rgba(167, 216, 222, 0.66), transparent 28%),
-    linear-gradient(180deg, #fff9ee 0%, #f5ead9 100%);
+    radial-gradient(circle at top left, rgba(255, 207, 153, 0.55), transparent 26%),
+    radial-gradient(circle at top right, rgba(151, 201, 232, 0.45), transparent 24%),
+    linear-gradient(180deg, #fbf4e7 0%, #efe6d7 100%);
 }
 
-#storybook-shell {
-  max-width: 1180px;
+#phase-one-shell {
+  max-width: 1240px;
   margin: 0 auto;
-  padding-bottom: 36px;
+  padding-bottom: 32px;
 }
 
 .hero-card,
 .surface-card {
-  background: var(--paper-soft);
-  border: 1px solid rgba(139, 94, 60, 0.14);
-  border-radius: 28px;
-  box-shadow: 0 18px 48px rgba(31, 41, 51, 0.09);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 16px 48px rgba(36, 48, 61, 0.08);
 }
 
 .hero-card {
-  padding: 28px;
+  padding: 24px;
 }
 
 .hero-card h1,
-.section-title,
-.storyboard-card h3 {
+.debug-title {
   font-family: "Fraunces", serif;
+  color: var(--ink);
 }
 
 .hero-card p,
-.status-copy,
-.storyboard-card p {
-  color: var(--muted);
-}
-
-.section-title {
-  margin: 0 0 10px;
-  color: var(--ink);
-}
-
-.storyboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-.storyboard-card {
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(139, 94, 60, 0.1);
-  border-radius: 22px;
-  padding: 16px;
-}
-
-.storyboard-card .eyebrow {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(246, 205, 122, 0.22);
-  color: var(--caramel);
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.storyboard-card h3 {
-  margin: 0 0 8px;
-  color: var(--ink);
-  font-size: 22px;
-}
-
-.storyboard-card p {
-  margin: 0;
-  line-height: 1.55;
-}
-
-.video-tip {
-  margin-top: 8px;
-  font-size: 14px;
+.debug-copy {
   color: var(--muted);
 }
 """
 
-INTRO_HTML = """
+INTRO_HTML = f"""
 <div class="hero-card">
-  <h1>Kid Drawing to Bedtime Story</h1>
-  <p>Upload one drawing and the app will turn it into a calm three-part bedtime story, three matching illustrations, spoken narration, and one final story video with built-in playback controls.</p>
-  <p><strong>Build:</strong> deterministic-v3-20260315</p>
+  <h1>Sequential Story Drafting Workbench</h1>
+  <p class="debug-copy">Phase 1 focuses only on clean text generation: one image description and three sequential story parts.</p>
+  <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
+  <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
+  <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
 </div>
 """
 
@@ -127,140 +77,95 @@ def _progress_adapter(progress: gr.Progress):
     return callback
 
 
-def _build_storyboard_html(story: StoryPackage) -> str:
-    cards: list[str] = []
-    for index, part in enumerate(story.parts, start=1):
-        cards.append(
-            """
-            <div class="storyboard-card">
-              <div class="eyebrow">Part {index}</div>
-              <h3>{scene_goal}</h3>
-              <p>{story_text}</p>
-            </div>
-            """.format(
-                index=index,
-                scene_goal=html.escape(part.scene_goal),
-                story_text=html.escape(part.story_text),
-            )
-        )
-    return '<div class="storyboard-grid">' + "".join(cards) + "</div>"
-
-
 def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(track_tqdm=False)):
     if not image_path:
-        raise gr.Error("Upload a drawing before starting the story pipeline.")
+        raise gr.Error("Upload a drawing before starting.")
 
     try:
-        result = _PIPELINE.create_story(image_path, progress_callback=_progress_adapter(progress))
+        result = _PIPELINE.create_story_draft(
+            image_path,
+            progress_callback=_progress_adapter(progress),
+        )
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
 
+    steps = result.draft.steps
     status = (
-        f"Created run `{result.run_id}`.\n\n"
-        f"Saved assets to `{result.run_dir}` and wrote the manifest to `{result.manifest_path}`."
-    )
-    gallery_items = [
-        (part.image_path, f"Part {index}: {part.scene_goal}")
-        for index, part in enumerate(result.story.parts, start=1)
-    ]
-    raw_story_response = Path(result.manifest.story_response_path).read_text(encoding="utf-8")
-    scene_prompts = "\n\n".join(
-        f"Part {index} ({part.scene_goal}):\n{part.image_prompt}"
-        for index, part in enumerate(result.story.parts, start=1)
+        f"Run `{result.run_id}` completed.\n\n"
+        f"Artifacts saved to `{result.run_dir}`."
     )
     return (
         status,
-        result.story.title,
-        result.story_markdown,
-        _build_storyboard_html(result.story),
-        gallery_items,
-        result.video_path,
-        result.narration_audio_path,
-        result.manifest_path,
+        result.input_image_path,
+        result.description_text,
+        steps[0].prompt_text,
+        steps[0].output_text,
+        steps[1].prompt_text,
+        steps[1].output_text,
+        steps[2].prompt_text,
+        steps[2].output_text,
         str(Path(result.run_dir).resolve()),
-        result.description.text,
-        raw_story_response,
-        scene_prompts,
     )
 
 
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(css=APP_CSS, title="Kid Drawing Story App") as demo:
-        with gr.Column(elem_id="storybook-shell"):
+    with gr.Blocks(css=APP_CSS, title="Sequential Story Drafting Workbench") as demo:
+        with gr.Column(elem_id="phase-one-shell"):
             gr.HTML(INTRO_HTML)
 
             with gr.Row():
-                with gr.Column(scale=5, min_width=320):
-                    drawing_input = gr.Image(
-                        label="Upload a drawing",
+                with gr.Column(scale=4, min_width=320):
+                    input_image = gr.Image(
+                        label="Upload or capture a drawing",
                         type="filepath",
                         image_mode="RGB",
+                        sources=["upload", "webcam"],
                     )
-                    create_button = gr.Button("Create Story", variant="primary")
-                with gr.Column(scale=4, min_width=320, elem_classes=["surface-card"]):
-                    gr.Markdown("### Run status")
-                    status_output = gr.Markdown(elem_classes=["status-copy"])
-                    title_output = gr.Textbox(label="Story title", interactive=False)
-                    gr.Markdown(
-                        "The final output below is a real MP4 video. Use its scrub bar to jump between the three story scenes without waiting for narration to finish.",
-                        elem_classes=["video-tip"],
-                    )
-
-            with gr.Row():
-                with gr.Column(scale=7, min_width=360):
-                    gr.Markdown("## Story Video", elem_classes=["section-title"])
-                    video_output = gr.Video(label=f"Final story video ({APP_BUILD})")
-                    audio_output = gr.File(label="Narration audio")
-                with gr.Column(scale=5, min_width=320):
-                    gr.Markdown("## Story Script", elem_classes=["section-title"])
-                    story_output = gr.Markdown()
-                    manifest_output = gr.File(label="Run manifest")
+                    create_button = gr.Button("Draft Story", variant="primary")
+                with gr.Column(scale=5, min_width=320, elem_classes=["surface-card"]):
+                    gr.Markdown("### Run status", elem_classes=["debug-title"])
+                    status_output = gr.Markdown()
                     run_dir_output = gr.Textbox(label="Run directory", interactive=False)
 
-            with gr.Row():
-                with gr.Accordion("Debug Strings", open=False):
-                    description_output = gr.Textbox(
-                        label="Drawing description",
-                        lines=4,
-                        interactive=False,
-                    )
-                    raw_story_output = gr.Textbox(
-                        label="Raw story model response",
-                        lines=10,
-                        interactive=False,
-                    )
-                    image_prompts_output = gr.Textbox(
-                        label="Scene image prompts",
-                        lines=10,
-                        interactive=False,
-                    )
+            with gr.Column(elem_classes=["surface-card"]):
+                preview_image = gr.Image(label="Uploaded image", interactive=False, type="filepath")
+                description_output = gr.Textbox(
+                    label="Generated description",
+                    lines=4,
+                    interactive=False,
+                )
 
             with gr.Row():
-                with gr.Column():
-                    gr.Markdown("## Storyboard", elem_classes=["section-title"])
-                    storyboard_output = gr.HTML()
-                    gallery_output = gr.Gallery(
-                        label="Scene gallery",
-                        columns=3,
-                        object_fit="cover",
-                    )
+                with gr.Column(elem_classes=["surface-card"]):
+                    gr.Markdown("### Part 1 Prompt", elem_classes=["debug-title"])
+                    part_1_prompt = gr.Textbox(lines=12, interactive=False)
+                    gr.Markdown("### Part 1 Output", elem_classes=["debug-title"])
+                    part_1_output = gr.Textbox(lines=6, interactive=False)
+                with gr.Column(elem_classes=["surface-card"]):
+                    gr.Markdown("### Part 2 Prompt", elem_classes=["debug-title"])
+                    part_2_prompt = gr.Textbox(lines=12, interactive=False)
+                    gr.Markdown("### Part 2 Output", elem_classes=["debug-title"])
+                    part_2_output = gr.Textbox(lines=6, interactive=False)
+                with gr.Column(elem_classes=["surface-card"]):
+                    gr.Markdown("### Part 3 Prompt", elem_classes=["debug-title"])
+                    part_3_prompt = gr.Textbox(lines=12, interactive=False)
+                    gr.Markdown("### Part 3 Output", elem_classes=["debug-title"])
+                    part_3_output = gr.Textbox(lines=6, interactive=False)
 
             create_button.click(
                 fn=generate_story,
-                inputs=[drawing_input],
+                inputs=[input_image],
                 outputs=[
                     status_output,
-                    title_output,
-                    story_output,
-                    storyboard_output,
-                    gallery_output,
-                    video_output,
-                    audio_output,
-                    manifest_output,
-                    run_dir_output,
+                    preview_image,
                     description_output,
-                    raw_story_output,
-                    image_prompts_output,
+                    part_1_prompt,
+                    part_1_output,
+                    part_2_prompt,
+                    part_2_output,
+                    part_3_prompt,
+                    part_3_output,
+                    run_dir_output,
                 ],
             )
 

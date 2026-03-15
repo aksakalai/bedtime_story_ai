@@ -2,52 +2,62 @@ import unittest
 
 from story_app.config import DEFAULT_CONFIG
 from story_app.prompts import (
-    build_character_bible,
     build_description_prompt,
-    build_story_prompt,
-    enrich_story_with_image_prompts,
+    build_story_part_prompt,
+    validate_description_text,
+    validate_story_part_text,
 )
-from story_app.schemas import DrawingDescription, StoryPackage, StoryPart
+from story_app.schemas import ValidationError
 
 
 class PromptTests(unittest.TestCase):
-    def setUp(self):
-        self.description = DrawingDescription(
-            text="A rabbit sails in a paper boat across a sparkling lake at night under navy and silver stars.",
+    def test_build_description_prompt_uses_clean_caption_prefix(self):
+        self.assertEqual(build_description_prompt(DEFAULT_CONFIG), "a child's drawing of")
+
+    def test_build_story_part_1_prompt_includes_description_and_beginning_instruction(self):
+        prompt = build_story_part_prompt(
+            description_text="A rabbit stands by a moonlit pond.",
+            step_name="part_1",
+            previous_parts=[],
         )
-        self.story = StoryPackage(
-            title="Luna and the Quiet Lake",
-            age_range="5-10",
-            parts=[
-                StoryPart(scene_goal="entrance", story_text="Part one text", image_prompt="rabbit in boat"),
-                StoryPart(scene_goal="buildup", story_text="Part two text", image_prompt="boat under stars"),
-                StoryPart(scene_goal="ending", story_text="Part three text", image_prompt="rabbit going to sleep"),
+        self.assertIn("Drawing description:", prompt)
+        self.assertIn("A rabbit stands by a moonlit pond.", prompt)
+        self.assertIn("first part of the story", prompt)
+        self.assertNotIn("Accepted story so far:", prompt)
+
+    def test_build_story_part_2_prompt_includes_part_1_exactly(self):
+        prompt = build_story_part_prompt(
+            description_text="A rabbit stands by a moonlit pond.",
+            step_name="part_2",
+            previous_parts=["The rabbit padded softly toward the quiet water under the moon."],
+        )
+        self.assertIn("Accepted story so far:", prompt)
+        self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
+        self.assertIn("second part of the same story", prompt)
+
+    def test_build_story_part_3_prompt_includes_part_1_and_part_2(self):
+        prompt = build_story_part_prompt(
+            description_text="A rabbit stands by a moonlit pond.",
+            step_name="part_3",
+            previous_parts=[
+                "The rabbit padded softly toward the quiet water under the moon.",
+                "He watched silver ripples drift across the pond and listened to the reeds.",
             ],
         )
+        self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
+        self.assertIn("2. He watched silver ripples drift across the pond and listened to the reeds.", prompt)
+        self.assertIn("third and final part", prompt)
 
-    def test_build_description_prompt_uses_blip_prefix(self):
-        prompt = build_description_prompt(DEFAULT_CONFIG)
-        self.assertEqual(prompt, "a detailed drawing of")
-        self.assertNotIn("Previous output was invalid", prompt)
+    def test_validate_description_text_rejects_structured_markers(self):
+        with self.assertRaises(ValidationError):
+            validate_description_text("```json {\"caption\": \"bad\"}```", DEFAULT_CONFIG)
 
-    def test_build_story_prompt_includes_line_contract_and_safety_rules(self):
-        prompt = build_story_prompt(self.description, DEFAULT_CONFIG)
-        self.assertIn("TITLE:", prompt)
-        self.assertIn("PARTS:", prompt)
-        self.assertIn(DEFAULT_CONFIG.story_separator_token, prompt)
-        self.assertIn("A rabbit sails in a paper boat", prompt)
-        self.assertNotIn("Previous output was invalid", prompt)
-
-    def test_build_character_bible_uses_shared_visual_details(self):
-        bible = build_character_bible(self.description)
-        self.assertIn("sparkling lake at night", bible)
-
-    def test_enrich_story_with_image_prompts_adds_shared_consistency(self):
-        enriched = enrich_story_with_image_prompts(self.story, self.description, DEFAULT_CONFIG)
-        self.assertEqual(len(enriched.parts), 3)
-        self.assertTrue(all("storybook children's illustration" in part.image_prompt for part in enriched.parts))
-        self.assertTrue(all(f"scene {index}" in part.image_prompt for index, part in enumerate(enriched.parts, start=1)))
-        self.assertTrue(all(len(part.image_prompt.split()) <= 60 for part in enriched.parts))
+    def test_validate_story_part_text_rejects_meta_wrapper(self):
+        with self.assertRaises(ValidationError):
+            validate_story_part_text(
+                "Here is the first part of the story: A rabbit walked to the pond in the moonlight and listened quietly.",
+                DEFAULT_CONFIG,
+            )
 
 
 if __name__ == "__main__":
