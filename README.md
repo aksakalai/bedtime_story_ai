@@ -1,20 +1,21 @@
 # Bedtime Story AI
 
-Phase 1 debug workbench for turning one uploaded drawing into:
+Resident storyboard workbench for turning one uploaded drawing into:
 
 - one grounded image description
 - one full story-writing conversation
 - three extracted story parts
+- three generated storyboard images
 
 ## Current Scope
 
-This repository is intentionally a Phase 1 baseline, not the full end-state product.
+This repository is intentionally a Phase 2A baseline, not the full end-state product.
 
 Current implemented flow:
 
-`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> artifact files under outputs/run_* -> Gradio debug UI`
+`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part image generation -> artifact files under outputs/run_* -> Gradio debug UI`
 
-Stable Phase 1 architecture:
+Current architecture:
 
 - `story_app/config.py` holds build and model settings
 - `story_app/prompts.py` holds prompt and validation rules
@@ -38,12 +39,18 @@ Stable artifact contract per run:
 - `story_part_1.txt`
 - `story_part_2.txt`
 - `story_part_3.txt`
+- `image_prompt_part_1.txt`
+- `image_prompt_part_2.txt`
+- `image_prompt_part_3.txt`
+- `story_part_1_image.png`
+- `story_part_2_image.png`
+- `story_part_3_image.png`
+- `storyboard_manifest.json`
 
 ## Not Yet Implemented
 
-The following stages are intentionally out of scope for this Phase 1 baseline:
+The following stages are intentionally out of scope for this baseline:
 
-- per-part image generation
 - narration or TTS
 - word-level timing and highlighting
 - video assembly or export
@@ -66,6 +73,7 @@ import story_app.config
 print("APP_BUILD:", story_app.config.APP_BUILD)
 print("Description model:", story_app.config.DEFAULT_CONFIG.models.image_describer)
 print("Story model:", story_app.config.DEFAULT_CONFIG.models.story_writer)
+print("Part image model:", story_app.config.DEFAULT_CONFIG.models.part_image_generator)
 
 demo = story_app.app.build_demo()
 demo.launch(debug=True, share=True, inline=False)
@@ -73,5 +81,6 @@ demo.launch(debug=True, share=True, inline=False)
 
 ## Models
 
-- Description: `Qwen/Qwen2-VL-2B-Instruct`
-- Story drafting: `Qwen/Qwen2.5-1.5B-Instruct`
+- Description: `Qwen/Qwen2.5-VL-3B-Instruct`
+- Story drafting: `Qwen/Qwen2.5-VL-3B-Instruct`
+- Storyboard images: `stabilityai/sd-turbo`

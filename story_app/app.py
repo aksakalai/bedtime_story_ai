@@ -59,11 +59,12 @@ APP_CSS = """
 
 INTRO_HTML = f"""
 <div class="hero-card">
-  <h1>Sequential Story Drafting Workbench</h1>
-  <p class="debug-copy">This build turns one uploaded drawing into one grounded description and a three-part story written as a growing conversation.</p>
+  <h1>Resident Storyboard Workbench</h1>
+  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, and one generated image for each story part.</p>
   <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
   <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
   <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
+  <p class="debug-copy"><strong>Part image model:</strong> {DEFAULT_CONFIG.models.part_image_generator}</p>
 </div>
 """
 
@@ -82,7 +83,7 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         raise gr.Error("Upload a drawing before starting.")
 
     try:
-        result = _PIPELINE.create_story_draft(
+        result = _PIPELINE.create_story_package(
             image_path,
             progress_callback=_progress_adapter(progress),
         )
@@ -99,8 +100,11 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         result.description.description_text,
         result.full_conversation_text,
         result.part_1_text,
+        result.story_part_1_image_path,
         result.part_2_text,
+        result.story_part_2_image_path,
         result.part_3_text,
+        result.story_part_3_image_path,
         str(Path(result.run_dir).resolve()),
     )
 
@@ -116,7 +120,7 @@ def clear_loaded_models() -> str:
 
 
 def build_demo() -> gr.Blocks:
-    with gr.Blocks(css=APP_CSS, title="Sequential Story Drafting Workbench") as demo:
+    with gr.Blocks(css=APP_CSS, title="Resident Storyboard Workbench") as demo:
         with gr.Column(elem_id="story-shell"):
             gr.HTML(INTRO_HTML)
 
@@ -128,7 +132,7 @@ def build_demo() -> gr.Blocks:
                         image_mode="RGB",
                         sources=["upload", "webcam"],
                     )
-                    create_button = gr.Button("Draft Story", variant="primary")
+                    create_button = gr.Button("Create", variant="primary")
                 with gr.Column(scale=5, min_width=320, elem_classes=["surface-card"]):
                     gr.Markdown("### Run status", elem_classes=["debug-title"])
                     status_output = gr.Markdown()
@@ -151,12 +155,27 @@ def build_demo() -> gr.Blocks:
                 with gr.Column(elem_classes=["surface-card"]):
                     gr.Markdown("### Story Part 1", elem_classes=["debug-title"])
                     part_1_output = gr.Textbox(lines=8, interactive=False)
+                    part_1_image_output = gr.Image(
+                        label="Part 1 image",
+                        interactive=False,
+                        type="filepath",
+                    )
                 with gr.Column(elem_classes=["surface-card"]):
                     gr.Markdown("### Story Part 2", elem_classes=["debug-title"])
                     part_2_output = gr.Textbox(lines=8, interactive=False)
+                    part_2_image_output = gr.Image(
+                        label="Part 2 image",
+                        interactive=False,
+                        type="filepath",
+                    )
                 with gr.Column(elem_classes=["surface-card"]):
                     gr.Markdown("### Story Part 3", elem_classes=["debug-title"])
                     part_3_output = gr.Textbox(lines=8, interactive=False)
+                    part_3_image_output = gr.Image(
+                        label="Part 3 image",
+                        interactive=False,
+                        type="filepath",
+                    )
 
             create_button.click(
                 fn=generate_story,
@@ -167,8 +186,11 @@ def build_demo() -> gr.Blocks:
                     description_output,
                     full_conversation_output,
                     part_1_output,
+                    part_1_image_output,
                     part_2_output,
+                    part_2_image_output,
                     part_3_output,
+                    part_3_image_output,
                     run_dir_output,
                 ],
             )

@@ -5,7 +5,7 @@ import gc
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .config import GenerationConfig
 from .schemas import ValidationError
@@ -70,6 +70,22 @@ def _build_model_kwargs() -> dict[str, Any]:
     else:
         model_kwargs["torch_dtype"] = torch.float32
     return model_kwargs
+
+
+def _get_resample_lanczos() -> Any:
+    if hasattr(Image, "Resampling"):
+        return Image.Resampling.LANCZOS
+    return Image.LANCZOS
+
+
+def _fit_with_padding(image: Image.Image, width: int, height: int) -> Image.Image:
+    image = image.convert("RGB")
+    resized = ImageOps.contain(image, (width, height), method=_get_resample_lanczos())
+    canvas = Image.new("RGB", (width, height), color=(245, 239, 229))
+    offset_x = (width - resized.width) // 2
+    offset_y = (height - resized.height) // 2
+    canvas.paste(resized, (offset_x, offset_y))
+    return canvas
 
 
 class Qwen25VLMultimodalEngine:
@@ -243,3 +259,101 @@ class Qwen25VLMultimodalEngine:
 
 Qwen2VLImageDescriber = Qwen25VLMultimodalEngine
 QwenStoryWriter = Qwen25VLMultimodalEngine
+
+
+class SDTurboImageGenerator:
+    def __init__(self, config: GenerationConfig):
+        self.config = config
+        self.device = "cpu"
+        self.pipeline: Any | None = None
+
+    def _resolve_model_id(self) -> str:
+        return self.config.models.part_image_generator
+
+    def _cache_key(self) -> tuple[str, str, str]:
+        return ("image_generator", self._resolve_model_id(), self.device)
+
+    def _load(self) -> None:
+        if self.pipeline is not None:
+            return
+
+        import torch
+        from diffusers import AutoPipelineForImage2Image
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        cache_key = self._cache_key()
+        cached = _get_model_cache().get(cache_key)
+        if cached is not None:
+            print(f"[image] Reusing cached model: {self._resolve_model_id()} on {self.device}")
+            self.pipeline = cached["pipeline"]
+            return
+
+        print(f"[image] Loading model: {self._resolve_model_id()} on {self.device}")
+        if self.device == "cuda":
+            self.pipeline = AutoPipelineForImage2Image.from_pretrained(
+                self._resolve_model_id(),
+                torch_dtype=torch.float16,
+                variant="fp16",
+                use_safetensors=True,
+            )
+        else:
+            self.pipeline = AutoPipelineForImage2Image.from_pretrained(
+                self._resolve_model_id(),
+                use_safetensors=True,
+            )
+
+        self.pipeline.to(self.device)
+        if hasattr(self.pipeline, "set_progress_bar_config"):
+            self.pipeline.set_progress_bar_config(disable=True)
+        if hasattr(self.pipeline, "enable_attention_slicing"):
+            self.pipeline.enable_attention_slicing()
+        _get_model_cache()[cache_key] = {"pipeline": self.pipeline}
+
+    def generate(
+        self,
+        *,
+        source_image_path: str | Path,
+        prompt_text: str,
+        seed: int,
+        output_path: str | Path,
+    ) -> Path:
+        self._load()
+        assert self.pipeline is not None
+
+        import torch
+
+        with Image.open(source_image_path) as source_image:
+            init_image = _fit_with_padding(
+                source_image,
+                self.config.image_width,
+                self.config.image_height,
+            )
+
+        if self.device == "cuda":
+            generator = torch.Generator(device="cuda").manual_seed(seed)
+        else:
+            generator = torch.Generator().manual_seed(seed)
+
+        result = self.pipeline(
+            prompt=prompt_text,
+            image=init_image,
+            num_inference_steps=self.config.image_num_inference_steps,
+            strength=self.config.image_strength,
+            guidance_scale=self.config.image_guidance_scale,
+            generator=generator,
+        )
+        generated_image = result.images[0]
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        generated_image.save(output_path)
+        print(f"[image] Saved image to {output_path}")
+        return output_path
+
+    def unload(self, clear_cache: bool = False) -> None:
+        if clear_cache:
+            _get_model_cache().pop(self._cache_key(), None)
+            self.pipeline = None
+            _clear_torch_memory()
+            return
+
+        self.pipeline = None

@@ -1,21 +1,30 @@
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
-from .assets import prepare_run_paths, write_text
+from .assets import prepare_run_paths, write_json, write_text
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
     build_description_prompt,
     build_description_messages,
+    build_story_part_image_prompt,
     build_story_messages,
     format_story_messages,
     validate_description_text,
     validate_story_part_text,
 )
-from .providers import Qwen25VLMultimodalEngine, clear_cached_models
-from .schemas import DescriptionResult, PipelineResult, StoryDraft
+from .providers import Qwen25VLMultimodalEngine, SDTurboImageGenerator, clear_cached_models
+from .schemas import (
+    DescriptionResult,
+    PipelineResult,
+    RunPaths,
+    StoryDraft,
+    StoryboardManifest,
+    StoryboardManifestPart,
+)
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -38,12 +47,15 @@ class KidStoryPipeline:
         config: GenerationConfig = DEFAULT_CONFIG,
         describer_factory=Qwen25VLMultimodalEngine,
         writer_factory=Qwen25VLMultimodalEngine,
+        image_generator_factory=SDTurboImageGenerator,
     ):
         self.config = config
         self.describer_factory = describer_factory
         self.writer_factory = writer_factory
+        self.image_generator_factory = image_generator_factory
         self._describer = None
         self._writer = None
+        self._image_generator = None
 
     def _notify(self, progress_callback: ProgressCallback | None, value: float, message: str) -> None:
         if progress_callback is not None:
@@ -63,13 +75,20 @@ class KidStoryPipeline:
             self._writer = self.writer_factory(self.config)
         return self._writer
 
+    def _get_image_generator(self):
+        if self._image_generator is None:
+            self._image_generator = self.image_generator_factory(self.config)
+        return self._image_generator
+
     def preload_models(self) -> None:
         self._get_describer()._load()
         self._get_writer()._load()
+        self._get_image_generator()._load()
 
     def clear_loaded_models(self) -> None:
         describer = self._describer
         writer = self._writer
+        image_generator = self._image_generator
         if describer is not None:
             try:
                 describer.unload(clear_cache=True)
@@ -80,15 +99,21 @@ class KidStoryPipeline:
                 writer.unload(clear_cache=True)
             except TypeError:
                 writer.unload()
+        if image_generator is not None:
+            try:
+                image_generator.unload(clear_cache=True)
+            except TypeError:
+                image_generator.unload()
         self._describer = None
         self._writer = None
+        self._image_generator = None
         clear_cached_models()
 
-    def create_story_draft(
+    def _create_story_draft_internal(
         self,
         image_path: str | Path,
         progress_callback: ProgressCallback | None = None,
-    ) -> PipelineResult:
+    ) -> tuple[RunPaths, PipelineResult]:
         print("[pipeline] Starting phase-1 story drafting")
         _seed_everything(self.config.random_seed)
         run_paths = prepare_run_paths(image_path, self.config.outputs_root)
@@ -165,6 +190,103 @@ class KidStoryPipeline:
             part_2_text=story_parts[1],
             part_3_text=story_parts[2],
         )
-        self._notify(progress_callback, 1.0, "Story draft ready")
         print("[pipeline] Story drafting complete")
+        return run_paths, result
+
+    def create_story_draft(
+        self,
+        image_path: str | Path,
+        progress_callback: ProgressCallback | None = None,
+    ) -> PipelineResult:
+        _, result = self._create_story_draft_internal(
+            image_path,
+            progress_callback=progress_callback,
+        )
+        self._notify(progress_callback, 1.0, "Story draft ready")
         return result
+
+    def create_story_package(
+        self,
+        image_path: str | Path,
+        progress_callback: ProgressCallback | None = None,
+    ) -> PipelineResult:
+        print("[pipeline] Starting phase-2 storyboard package")
+        run_paths, draft_result = self._create_story_draft_internal(
+            image_path,
+            progress_callback=progress_callback,
+        )
+        image_generator = self._get_image_generator()
+        self._notify(progress_callback, 0.9, "Generating storyboard images")
+        story_parts = [
+            draft_result.part_1_text,
+            draft_result.part_2_text,
+            draft_result.part_3_text,
+        ]
+        prompt_paths = [
+            run_paths.image_prompt_part_1_path,
+            run_paths.image_prompt_part_2_path,
+            run_paths.image_prompt_part_3_path,
+        ]
+        image_paths = [
+            run_paths.story_part_1_image_path,
+            run_paths.story_part_2_image_path,
+            run_paths.story_part_3_image_path,
+        ]
+        generated_prompt_paths: list[str] = []
+        generated_image_paths: list[str] = []
+        manifest_parts: list[StoryboardManifestPart] = []
+        progress_points = [0.92, 0.96, 1.0]
+
+        for index, part_text in enumerate(story_parts, start=1):
+            prompt_text = build_story_part_image_prompt(
+                self.config,
+                description_text=draft_result.description.description_text,
+                part_text=part_text,
+            )
+            prompt_path = prompt_paths[index - 1]
+            image_path_for_part = image_paths[index - 1]
+            seed = self.config.random_seed + self.config.image_seed_stride + index
+
+            write_text(prompt_path, prompt_text)
+            output_path = image_generator.generate(
+                source_image_path=run_paths.input_image_path,
+                prompt_text=prompt_text,
+                seed=seed,
+                output_path=image_path_for_part,
+            )
+            generated_prompt_paths.append(str(prompt_path.resolve()))
+            generated_image_paths.append(str(output_path.resolve()))
+            manifest_parts.append(
+                StoryboardManifestPart(
+                    index=index,
+                    text=part_text,
+                    image_prompt=prompt_text,
+                    seed=seed,
+                    image_path=str(output_path.resolve()),
+                )
+            )
+            self._notify(
+                progress_callback,
+                progress_points[index - 1],
+                f"Generated image for part {index}",
+            )
+
+        manifest = StoryboardManifest(
+            run_id=draft_result.run_id,
+            input_image_path=draft_result.input_image_path,
+            description_text=draft_result.description.description_text,
+            parts=manifest_parts,
+        )
+        write_json(run_paths.storyboard_manifest_path, manifest.to_dict())
+        print("[pipeline] Storyboard package complete")
+
+        return replace(
+            draft_result,
+            image_prompt_part_1_path=generated_prompt_paths[0],
+            image_prompt_part_2_path=generated_prompt_paths[1],
+            image_prompt_part_3_path=generated_prompt_paths[2],
+            story_part_1_image_path=generated_image_paths[0],
+            story_part_2_image_path=generated_image_paths[1],
+            story_part_3_image_path=generated_image_paths[2],
+            storyboard_manifest_path=str(run_paths.storyboard_manifest_path.resolve()),
+        )

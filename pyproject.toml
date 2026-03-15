@@ -12,6 +12,7 @@ authors = [{ name = "Codex" }]
 dependencies = [
   "accelerate>=1.1.0",
   "bitsandbytes>=0.43.3; platform_system != 'Darwin'",
+  "diffusers>=0.32.2",
   "gradio>=5.5.0",
   "Pillow>=10.4.0",
   "safetensors>=0.4.5",

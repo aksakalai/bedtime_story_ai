@@ -82,6 +82,21 @@ def build_story_messages(
     return messages
 
 
+def build_story_part_image_prompt(
+    config: GenerationConfig,
+    *,
+    description_text: str,
+    part_text: str,
+) -> str:
+    return (
+        "Create one single-story illustration for this bedtime story moment. "
+        f"Scene description: {description_text} "
+        f"Story moment: {part_text} "
+        "Show only what belongs to this moment while staying faithful to the same setting and characters. "
+        f"{config.image_prompt_style_suffix}"
+    )
+
+
 def _format_message_content(content: Any) -> str:
     if isinstance(content, list):
         lines: list[str] = []

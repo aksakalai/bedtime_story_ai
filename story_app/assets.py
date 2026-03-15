@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 from shutil import copy2
@@ -11,6 +12,11 @@ from .schemas import RunPaths
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def copy_input_image(source_image_path: str | Path, destination_path: Path) -> Path:
@@ -38,4 +44,11 @@ def prepare_run_paths(source_image_path: str | Path, outputs_root: Path) -> RunP
         story_part_1_path=run_dir / "story_part_1.txt",
         story_part_2_path=run_dir / "story_part_2.txt",
         story_part_3_path=run_dir / "story_part_3.txt",
+        image_prompt_part_1_path=run_dir / "image_prompt_part_1.txt",
+        image_prompt_part_2_path=run_dir / "image_prompt_part_2.txt",
+        image_prompt_part_3_path=run_dir / "image_prompt_part_3.txt",
+        story_part_1_image_path=run_dir / "story_part_1_image.png",
+        story_part_2_image_path=run_dir / "story_part_2_image.png",
+        story_part_3_image_path=run_dir / "story_part_3_image.png",
+        storyboard_manifest_path=run_dir / "storyboard_manifest.json",
     )
