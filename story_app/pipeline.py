@@ -104,6 +104,13 @@ class KidStoryPipeline:
                 output_text = validate_story_part_text(raw_output, self.config)
                 output_text = normalize_text(output_text)
                 write_text(output_path, output_text)
+                ends_cleanly = output_text.rstrip("\"')]} ").endswith((".", "!", "?"))
+                print(
+                    f"[pipeline] {step_name} stats: "
+                    f"words={len(output_text.split())}, "
+                    f"chars={len(output_text)}, "
+                    f"ends_cleanly={ends_cleanly}"
+                )
                 print(f"[pipeline] {step_name} output: {output_text}")
                 steps.append(
                     StoryStep(

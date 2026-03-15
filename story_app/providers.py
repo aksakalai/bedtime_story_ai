@@ -159,6 +159,8 @@ class QwenStoryWriter:
 
         inputs = self.tokenizer(prompt_text, return_tensors="pt")
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
+        prompt_token_count = int(inputs["input_ids"].shape[1])
+        print(f"[story] Prompt token count: {prompt_token_count}")
         output_ids = self.model.generate(
             **inputs,
             max_new_tokens=self.config.story_part_max_tokens,
@@ -166,7 +168,25 @@ class QwenStoryWriter:
             pad_token_id=self.tokenizer.eos_token_id,
         )
         prompt_length = inputs["input_ids"].shape[1]
-        return self.tokenizer.decode(output_ids[0][prompt_length:], skip_special_tokens=True).strip()
+        completion_ids = output_ids[0][prompt_length:]
+        generated_token_count = int(completion_ids.shape[0])
+        hit_token_cap = generated_token_count >= self.config.story_part_max_tokens
+        ended_with_eos = bool(
+            generated_token_count
+            and self.tokenizer.eos_token_id is not None
+            and int(completion_ids[-1].item()) == int(self.tokenizer.eos_token_id)
+        )
+        decoded = self.tokenizer.decode(completion_ids, skip_special_tokens=True).strip()
+        tail_preview = decoded[-120:] if decoded else ""
+        print(
+            "[story] Generation stats: "
+            f"generated_tokens={generated_token_count}, "
+            f"max_new_tokens={self.config.story_part_max_tokens}, "
+            f"hit_token_cap={hit_token_cap}, "
+            f"ended_with_eos={ended_with_eos}"
+        )
+        print(f"[story] Output tail preview: {tail_preview}")
+        return decoded
 
     def unload(self) -> None:
         self.tokenizer = None

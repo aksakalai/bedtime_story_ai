@@ -51,6 +51,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("2. He watched silver ripples drift across the pond and listened to the reeds.", prompt)
         self.assertIn("third and final part", prompt)
         self.assertIn("Resolve the middle event clearly", prompt)
+        self.assertIn("last sentence must clearly close the story", prompt)
+        self.assertIn("End with a complete sentence.", prompt)
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):
@@ -60,6 +62,13 @@ class PromptTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_story_part_text(
                 "Here is the first part of the story: A rabbit walked to the pond in the moonlight and listened quietly.",
+                DEFAULT_CONFIG,
+            )
+
+    def test_validate_story_part_text_rejects_incomplete_ending(self):
+        with self.assertRaises(ValidationError):
+            validate_story_part_text(
+                "A rabbit walked beside the pond under the moon and listened to the reeds while the quiet forest wrapped around him and he knew he belonged in this",
                 DEFAULT_CONFIG,
             )
 

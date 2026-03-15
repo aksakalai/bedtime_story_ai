@@ -51,6 +51,7 @@ def build_story_part_prompt(
         "part_3": (
             "Write only the third and final part of the same story, which is the ending."
             " Resolve the middle event clearly and finish the story gently."
+            " The last sentence must clearly close the story."
         ),
     }
     if step_name not in step_instructions:
@@ -87,7 +88,8 @@ def build_story_part_prompt(
         - Stay grounded in the drawing description and use concrete visual details from it.
         - The full story arc must be setup in part 1, event in part 2, and conclusion in part 3.
         - Keep the tone warm, gentle, and bedtime-friendly.
-        - Write 45 to 65 words.
+        - Aim for about 45 to 65 words, but finish the paragraph cleanly.
+        - End with a complete sentence.
         - Avoid a cliffhanger in part 3.
 
         Story text:
@@ -119,4 +121,7 @@ def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
             raise ValidationError("Story part started with assistant wrapper text.")
     if any(marker in text for marker in ("```", "{", "}", "<|", "|>")):
         raise ValidationError("Story part contained structured output markers or special tokens.")
+    stripped = text.rstrip("\"')]} ")
+    if not stripped.endswith((".", "!", "?")):
+        raise ValidationError("Story part did not end with a complete sentence.")
     return text
