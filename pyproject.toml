@@ -14,9 +14,10 @@ dependencies = [
   "bitsandbytes>=0.43.3; platform_system != 'Darwin'",
   "gradio>=5.5.0",
   "Pillow>=10.4.0",
+  "qwen-vl-utils>=0.0.8",
   "safetensors>=0.4.5",
   "torch>=2.4.0",
-  "transformers>=4.46.0"
+  "transformers>=4.50.0"
 ]
 
 [tool.setuptools.packages.find]

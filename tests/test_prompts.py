@@ -12,7 +12,8 @@ from story_app.schemas import ValidationError
 
 class PromptTests(unittest.TestCase):
     def test_build_description_prompt_uses_clean_caption_prefix(self):
-        self.assertEqual(build_description_prompt(DEFAULT_CONFIG), "a detailed colorful child's drawing of")
+        self.assertIn("exact visible detail", build_description_prompt(DEFAULT_CONFIG))
+        self.assertIn("colors", build_description_prompt(DEFAULT_CONFIG))
 
     def test_build_story_part_1_prompt_includes_description_and_beginning_instruction(self):
         prompt = build_story_part_prompt(

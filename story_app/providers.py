@@ -4,8 +4,6 @@ import gc
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
-
 from .config import GenerationConfig
 
 
@@ -26,7 +24,7 @@ def _torch_dtype():
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-class BlipImageDescriber:
+class QwenVLImageDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"
@@ -38,41 +36,72 @@ class BlipImageDescriber:
             return
 
         import torch
-        from transformers import BlipForConditionalGeneration, BlipProcessor
+        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[describe] Loading model: {self.config.models.image_describer} on {self.device}")
-        self.processor = BlipProcessor.from_pretrained(self.config.models.image_describer)
-        self.model = BlipForConditionalGeneration.from_pretrained(
+        self.processor = AutoProcessor.from_pretrained(self.config.models.image_describer)
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             self.config.models.image_describer,
-            torch_dtype=_torch_dtype(),
+            torch_dtype="auto",
+            device_map="auto",
         )
-        self.model.to(self.device)
+        try:
+            self.device = str(next(self.model.parameters()).device)
+        except StopIteration:
+            self.device = "cpu"
 
     def describe(self, image_path: str | Path, prompt_text: str) -> str:
         self._load()
         assert self.processor is not None
         assert self.model is not None
 
-        with Image.open(image_path) as image:
-            image = image.convert("RGB")
-            model_inputs = self.processor(images=image, text=prompt_text, return_tensors="pt")
-            prepared_inputs: dict[str, Any] = {}
-            for key, value in model_inputs.items():
-                if getattr(value, "dtype", None) is not None and value.dtype.is_floating_point:
-                    prepared_inputs[key] = value.to(self.device, dtype=_torch_dtype())
-                else:
-                    prepared_inputs[key] = value.to(self.device)
+        from qwen_vl_utils import process_vision_info
 
-            generated_ids = self.model.generate(
-                **prepared_inputs,
-                max_new_tokens=self.config.description_max_tokens,
-                do_sample=False,
-                num_beams=4,
-                no_repeat_ngram_size=3,
-                repetition_penalty=1.1,
-            )
-        return self.processor.decode(generated_ids[0], skip_special_tokens=True).strip()
+        image_uri = Path(image_path).resolve().as_uri()
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image_uri},
+                    {"type": "text", "text": prompt_text},
+                ],
+            }
+        ]
+        rendered_prompt = self.processor.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        model_inputs = self.processor(
+            text=[rendered_prompt],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        prepared_inputs: dict[str, Any] = {}
+        for key, value in model_inputs.items():
+            if getattr(value, "dtype", None) is not None and value.dtype.is_floating_point:
+                prepared_inputs[key] = value.to(self.device, dtype=_torch_dtype())
+            else:
+                prepared_inputs[key] = value.to(self.device)
+
+        generated_ids = self.model.generate(
+            **prepared_inputs,
+            max_new_tokens=self.config.description_max_tokens,
+            do_sample=False,
+        )
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):]
+            for in_ids, out_ids in zip(prepared_inputs["input_ids"], generated_ids)
+        ]
+        return self.processor.batch_decode(
+            generated_ids_trimmed,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )[0].strip()
 
     def unload(self) -> None:
         self.processor = None

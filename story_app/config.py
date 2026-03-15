@@ -4,20 +4,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-v3-20260315"
+APP_BUILD = "phase1-v4-20260315"
 
 
 @dataclass(frozen=True)
 class ModelIds:
-    image_describer: str = "Salesforce/blip-image-captioning-large"
+    image_describer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
     story_writer: str = "Qwen/Qwen2.5-1.5B-Instruct"
 
 
 @dataclass(frozen=True)
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
-    description_prompt_prefix: str = "a detailed colorful child's drawing of"
-    description_max_tokens: int = 96
+    description_prompt_prefix: str = (
+        "Describe this child's drawing in exact visible detail. Mention the characters, important objects, "
+        "colors, positions, facial expressions, clothing, background elements, and notable shapes or patterns. "
+        "Do not invent hidden story events. Write one clean paragraph only."
+    )
+    description_max_tokens: int = 140
     story_part_max_tokens: int = 120
     min_description_words: int = 10
     min_story_part_words: int = 20
