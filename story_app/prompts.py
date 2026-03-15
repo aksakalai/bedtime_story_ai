@@ -20,116 +20,12 @@ _META_PREFIX_PATTERNS = (
     r"^story\s*:",
 )
 
-_ANCHOR_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "black",
-    "blue",
-    "brown",
-    "by",
-    "child",
-    "childs",
-    "cloud",
-    "clouds",
-    "calm",
-    "dark",
-    "details",
-    "drawing",
-    "edge",
-    "edges",
-    "evening",
-    "exact",
-    "from",
-    "green",
-    "in",
-    "is",
-    "it",
-    "its",
-    "light",
-    "lights",
-    "line",
-    "lines",
-    "little",
-    "morning",
-    "of",
-    "on",
-    "one",
-    "or",
-    "outside",
-    "picture",
-    "pictured",
-    "red",
-    "scene",
-    "setting",
-    "small",
-    "sky",
-    "sunlight",
-    "the",
-    "this",
-    "to",
-    "tops",
-    "two",
-    "visible",
-    "warm",
-    "weather",
-    "white",
-    "with",
-    "yellow",
-}
-
 
 def normalize_text(raw_text: str) -> str:
     text = re.sub(r"\s+", " ", raw_text).strip()
     if not text:
         raise ValidationError("Model output was empty.")
     return text
-
-
-def _tokenize_words(raw_text: str) -> list[str]:
-    return re.findall(r"[a-zA-Z']+", raw_text.lower())
-
-
-def extract_visual_anchor_words(description_text: str, max_words: int = 8) -> list[str]:
-    anchors: list[str] = []
-    for token in _tokenize_words(description_text):
-        if len(token) < 3:
-            continue
-        if token in _ANCHOR_STOPWORDS:
-            continue
-        if token not in anchors:
-            anchors.append(token)
-        if len(anchors) >= max_words:
-            break
-    return anchors
-
-
-def find_anchor_overlap(description_text: str, story_text: str) -> list[str]:
-    anchors = extract_visual_anchor_words(description_text)
-    story_words = set(_tokenize_words(story_text))
-    return [anchor for anchor in anchors if anchor in story_words]
-
-
-def validate_story_grounding(
-    description_text: str,
-    story_text: str,
-    config: GenerationConfig,
-) -> list[str]:
-    anchors = extract_visual_anchor_words(description_text)
-    if not anchors:
-        return []
-    overlap = find_anchor_overlap(description_text, story_text)
-    required_overlap = min(config.min_story_anchor_overlap, len(anchors))
-    if len(overlap) < required_overlap:
-        raise ValidationError(
-            "Story part drifted away from the drawing details. "
-            f"Expected at least {required_overlap} anchor words from the description, got {len(overlap)}."
-        )
-    return overlap
 
 
 def build_description_prompt(config: GenerationConfig) -> str:
@@ -142,7 +38,6 @@ def build_story_part_prompt(
     step_name: str,
     previous_parts: list[str],
 ) -> str:
-    visual_anchors = extract_visual_anchor_words(description_text)
     step_instructions = {
         "part_1": (
             "Write the beginning of a three-part bedtime story."
@@ -150,12 +45,14 @@ def build_story_part_prompt(
             " and the calm starting situation from the drawing."
             " If no person or animal is visible, invent only one gentle main character and place that"
             " character inside this exact pictured setting."
+            " Be sure to mention the uniquely identifiable details from the drawing description."
         ),
         "part_2": (
             "Write the middle of the same story."
             " Continue directly from the accepted story so far without restarting it."
             " In one short paragraph, let one specific gentle event happen."
             " The event must directly involve something clearly visible in the drawing."
+            " Be sure to continue using the uniquely identifiable details from the drawing description."
         ),
         "part_3": (
             "Write the ending of the same story."
@@ -188,9 +85,6 @@ def build_story_part_prompt(
         Drawing description:
         {description_text}
 
-        Required visual anchors:
-        {", ".join(visual_anchors) if visual_anchors else "Use the main visible objects from the description."}
-
         {story_so_far_block}Task:
         {step_instructions[step_name]}
 
@@ -202,13 +96,13 @@ def build_story_part_prompt(
         - Do not mention being an AI or assistant.
         - The story must take place in the exact pictured scene described above.
         - Stay grounded in the drawing description and use concrete visual details from it.
-        - Use at least three concrete details from the drawing description in this paragraph whenever natural.
-        - Keep the same major objects and setting consistent across all three parts.
-        - Keep the action physically near the pictured objects instead of moving to a different place.
+        - Evaluate the uniquely identifiable details from the drawing description and make sure they appear naturally in the story, especially in part 1 and part 2.
+        - Keep the same major objects, colors, and setting consistent across all three parts.
+        - Do not move the story to an unrelated indoor or outdoor place.
         - Do not introduce a new place, weather pattern, or major object that is not supported by the drawing description.
         - Keep the full arc clear: setup in part 1, event in part 2, conclusion in part 3.
         - Keep the tone warm, gentle, and bedtime-friendly.
-        - Aim for about 45 to 55 words, but finish the paragraph cleanly.
+        - Aim for about 45 to 65 words, but finish the paragraph cleanly.
         - End with a complete sentence.
         - Stop immediately after the paragraph.
         - Avoid a cliffhanger in part 3.

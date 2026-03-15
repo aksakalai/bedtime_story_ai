@@ -7,6 +7,7 @@ from typing import Any
 from PIL import Image
 
 from .config import GenerationConfig
+from .schemas import ValidationError
 
 
 def _clear_torch_memory() -> None:
@@ -117,6 +118,11 @@ class Qwen2VLImageDescriber:
         )
         print(f"[describe] Output word count: {len(decoded.split())}")
         print(f"[describe] Output preview: {decoded[:240]}")
+        if not ended_with_eos:
+            raise ValidationError(
+                "Description generation did not finish naturally before the safety limit. "
+                "Increase the description token ceiling or tighten the prompt."
+            )
         return decoded
 
     def unload(self) -> None:
@@ -222,6 +228,11 @@ class QwenStoryWriter:
         )
         print(f"[story] Output word count: {len(decoded.split())}")
         print(f"[story] Output tail preview: {tail_preview}")
+        if not ended_with_eos:
+            raise ValidationError(
+                "Story generation did not finish naturally before the safety limit. "
+                "Increase the story token ceiling or tighten the prompt."
+            )
         return decoded
 
     def unload(self) -> None:
