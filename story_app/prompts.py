@@ -6,31 +6,21 @@ from typing import Any
 from .config import GenerationConfig
 from .schemas import ValidationError
 
-MULTIMODAL_SYSTEM_PROMPT = (
-    "You carefully observe the image and follow the current request. When asked for a description, write only a "
-    "grounded description of visible scene details. When asked for a story part, write only gentle bedtime-story "
-    "prose that stays faithful to the same image and the earlier conversation. Reply only with the requested text. "
-    "Do not add labels or meta commentary."
+DESCRIPTION_SYSTEM_PROMPT = (
+    "You carefully observe the image and follow the current request. Write only a grounded description of the "
+    "depicted scene. Do not add labels or meta commentary."
 )
 
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
 
-PART_1_USER_PROMPT = (
-    "Using the same image and your description above, write only part 1 of a gentle three-part bedtime story. Keep "
-    "it grounded in the visible scene, warm, concise, and clean. Write about 50 words. Reply only with the story "
-    "text."
+STORY_SYSTEM_PROMPT = (
+    "You write gentle bedtime-story prose. Stay faithful to the provided scene description and the earlier story "
+    "parts. Reply only with the requested story text. Do not add labels or meta commentary."
 )
 
-PART_2_USER_PROMPT = (
-    "Using the same image and the story so far, write only part 2 of the same bedtime story. Continue directly, stay "
-    "grounded in the visible scene, keep it gentle, and write about 50 words. Reply only with the story text."
-)
+PART_2_USER_PROMPT = "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, keep it gentle, and write about 50 words. Reply only with the story text."
 
-PART_3_USER_PROMPT = (
-    "Using the same image and the story so far, write only part 3 of the same bedtime story. Continue directly, keep "
-    "it grounded in the visible scene, end with a calm hopeful feeling, and write about 50 words. Reply only with "
-    "the story text."
-)
+PART_3_USER_PROMPT = "Write only part 3 of the same bedtime story. Continue directly, stay grounded in the same scene description, end with a calm hopeful feeling, and write about 50 words. Reply only with the story text."
 
 
 def normalize_text(raw_text: str) -> str:
@@ -53,22 +43,28 @@ def build_image_text_content(prompt_text: str) -> list[dict[str, str]]:
 
 def build_description_messages(prompt_text: str) -> list[dict[str, Any]]:
     return [
-        {"role": "system", "content": MULTIMODAL_SYSTEM_PROMPT},
+        {"role": "system", "content": DESCRIPTION_SYSTEM_PROMPT},
         {"role": "user", "content": build_image_text_content(prompt_text)},
     ]
 
 
+def build_story_part_1_prompt(description_text: str) -> str:
+    return (
+        "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
+        f"Scene description:\n{description_text}\n\n"
+        "Keep the story grounded in those visible details, begin in that scene, stay warm and clean, and write about "
+        "50 words. Reply only with the story text."
+    )
+
+
 def build_story_messages(
     *,
-    description_prompt: str,
     description_text: str,
     previous_parts: list[str],
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": MULTIMODAL_SYSTEM_PROMPT},
-        {"role": "user", "content": build_image_text_content(description_prompt)},
-        {"role": "assistant", "content": description_text},
-        {"role": "user", "content": build_image_text_content(PART_1_USER_PROMPT)},
+        {"role": "system", "content": STORY_SYSTEM_PROMPT},
+        {"role": "user", "content": build_story_part_1_prompt(description_text)},
     ]
 
     if not previous_parts:
@@ -77,12 +73,12 @@ def build_story_messages(
     messages.append({"role": "assistant", "content": previous_parts[0]})
 
     if len(previous_parts) == 1:
-        messages.append({"role": "user", "content": build_image_text_content(PART_2_USER_PROMPT)})
+        messages.append({"role": "user", "content": PART_2_USER_PROMPT})
         return messages
 
-    messages.append({"role": "user", "content": build_image_text_content(PART_2_USER_PROMPT)})
+    messages.append({"role": "user", "content": PART_2_USER_PROMPT})
     messages.append({"role": "assistant", "content": previous_parts[1]})
-    messages.append({"role": "user", "content": build_image_text_content(PART_3_USER_PROMPT)})
+    messages.append({"role": "user", "content": PART_3_USER_PROMPT})
     return messages
 
 

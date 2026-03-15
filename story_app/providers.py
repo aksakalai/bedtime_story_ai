@@ -138,11 +138,13 @@ class Qwen25VLMultimodalEngine:
             add_generation_prompt=True,
         )
 
-        with Image.open(image_path) as image:
-            image = image.convert("RGB")
-            images = [image.copy() for _ in range(image_slots)]
+        images: list[Any] = []
+        if image_slots:
+            with Image.open(image_path) as image:
+                image = image.convert("RGB")
+                images = [image.copy() for _ in range(image_slots)]
 
-        if images:
+        if image_slots:
             model_inputs = self.processor(
                 text=[rendered_prompt],
                 images=images,

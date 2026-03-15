@@ -116,7 +116,6 @@ class KidStoryPipeline:
         story_parts: list[str] = []
         for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
             messages = build_story_messages(
-                description_prompt=description_prompt,
                 description_text=description_text,
                 previous_parts=story_parts,
             )
@@ -139,7 +138,6 @@ class KidStoryPipeline:
             self._notify(progress_callback, 0.35 + (index * 0.18), f"Generated {step_name}")
 
         final_messages = build_story_messages(
-            description_prompt=description_prompt,
             description_text=description_text,
             previous_parts=story_parts[:2],
         )

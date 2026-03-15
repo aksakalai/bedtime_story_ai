@@ -136,7 +136,6 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(result.part_2_text, VALID_PART_2)
             self.assertEqual(result.part_3_text, VALID_PART_3)
             self.assertIn("SYSTEM:", result.full_conversation_text)
-            self.assertIn("[IMAGE]", result.full_conversation_text)
             self.assertIn(VALID_DESCRIPTION, result.full_conversation_text)
             self.assertIn(VALID_PART_1, result.full_conversation_text)
             self.assertIn(VALID_PART_2, result.full_conversation_text)
