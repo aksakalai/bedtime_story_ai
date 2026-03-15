@@ -13,7 +13,7 @@ from .prompts import (
     validate_description_text,
     validate_story_part_text,
 )
-from .providers import Qwen2VLImageDescriber, QwenStoryWriter
+from .providers import Qwen2VLImageDescriber, QwenStoryWriter, clear_cached_models
 from .schemas import DescriptionResult, PipelineResult, StoryDraft
 
 ProgressCallback = Callable[[float, str], None]
@@ -41,10 +41,41 @@ class KidStoryPipeline:
         self.config = config
         self.describer_factory = describer_factory
         self.writer_factory = writer_factory
+        self._describer = None
+        self._writer = None
 
     def _notify(self, progress_callback: ProgressCallback | None, value: float, message: str) -> None:
         if progress_callback is not None:
             progress_callback(value, message)
+
+    def _get_describer(self):
+        if self._describer is None:
+            self._describer = self.describer_factory(self.config)
+        return self._describer
+
+    def _get_writer(self):
+        if self._writer is None:
+            self._writer = self.writer_factory(self.config)
+        return self._writer
+
+    def preload_models(self) -> None:
+        self._get_describer()._load()
+        self._get_writer()._load()
+
+    def clear_loaded_models(self) -> None:
+        if self._describer is not None:
+            try:
+                self._describer.unload(clear_cache=True)
+            except TypeError:
+                self._describer.unload()
+            self._describer = None
+        if self._writer is not None:
+            try:
+                self._writer.unload(clear_cache=True)
+            except TypeError:
+                self._writer.unload()
+            self._writer = None
+        clear_cached_models()
 
     def create_story_draft(
         self,
@@ -60,12 +91,9 @@ class KidStoryPipeline:
         description_prompt = build_description_prompt(self.config)
         write_text(run_paths.description_prompt_path, description_prompt)
 
-        describer = self.describer_factory(self.config)
-        try:
-            raw_description = describer.describe(run_paths.input_image_path, description_prompt)
-            description_text = validate_description_text(raw_description, self.config)
-        finally:
-            describer.unload()
+        describer = self._get_describer()
+        raw_description = describer.describe(run_paths.input_image_path, description_prompt)
+        description_text = validate_description_text(raw_description, self.config)
 
         write_text(run_paths.description_path, description_text)
         description = DescriptionResult(
@@ -76,33 +104,30 @@ class KidStoryPipeline:
         print(f"[pipeline] Description: {description_text}")
 
         self._notify(progress_callback, 0.35, "Writing part 1")
-        writer = self.writer_factory(self.config)
+        writer = self._get_writer()
         story_parts: list[str] = []
-        try:
-            for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
-                messages = build_story_messages(
-                    description_text=description_text,
-                    previous_parts=story_parts,
-                )
-                raw_output = writer.generate_part(messages)
-                output_text = validate_story_part_text(raw_output, self.config)
-                story_parts.append(output_text)
-                if step_name == "part_1":
-                    story_path = run_paths.story_part_1_path
-                elif step_name == "part_2":
-                    story_path = run_paths.story_part_2_path
-                else:
-                    story_path = run_paths.story_part_3_path
-                write_text(story_path, output_text)
-                print(
-                    f"[pipeline] {step_name} stats: "
-                    f"words={len(output_text.split())}, "
-                    f"chars={len(output_text)}"
-                )
-                print(f"[pipeline] {step_name} output: {output_text}")
-                self._notify(progress_callback, 0.35 + (index * 0.18), f"Generated {step_name}")
-        finally:
-            writer.unload()
+        for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
+            messages = build_story_messages(
+                description_text=description_text,
+                previous_parts=story_parts,
+            )
+            raw_output = writer.generate_part(messages)
+            output_text = validate_story_part_text(raw_output, self.config)
+            story_parts.append(output_text)
+            if step_name == "part_1":
+                story_path = run_paths.story_part_1_path
+            elif step_name == "part_2":
+                story_path = run_paths.story_part_2_path
+            else:
+                story_path = run_paths.story_part_3_path
+            write_text(story_path, output_text)
+            print(
+                f"[pipeline] {step_name} stats: "
+                f"words={len(output_text.split())}, "
+                f"chars={len(output_text)}"
+            )
+            print(f"[pipeline] {step_name} output: {output_text}")
+            self._notify(progress_callback, 0.35 + (index * 0.18), f"Generated {step_name}")
 
         final_messages = build_story_messages(
             description_text=description_text,

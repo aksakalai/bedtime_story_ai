@@ -105,6 +105,16 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
     )
 
 
+def preload_models() -> str:
+    _PIPELINE.preload_models()
+    return "Models are loaded and ready in the current Python session."
+
+
+def clear_loaded_models() -> str:
+    _PIPELINE.clear_loaded_models()
+    return "Loaded models have been cleared from the current Python session."
+
+
 def build_demo() -> gr.Blocks:
     with gr.Blocks(css=APP_CSS, title="Sequential Story Drafting Workbench") as demo:
         with gr.Column(elem_id="story-shell"):

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-story-drafting-v2-20260315"
+APP_BUILD = "phase1-story-drafting-v3-20260315"
 
 
 @dataclass(frozen=True)

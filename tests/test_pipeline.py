@@ -32,6 +32,24 @@ class FakeDescriber:
         return None
 
 
+class ReusableDescriber:
+    instances = []
+
+    def __init__(self, config):
+        self.config = config
+        self.describe_calls = 0
+        self.unload_calls = 0
+        ReusableDescriber.instances.append(self)
+
+    def describe(self, image_path, prompt_text):
+        self.describe_calls += 1
+        return VALID_DESCRIPTION
+
+    def unload(self, clear_cache=False):
+        self.unload_calls += 1
+        return None
+
+
 class FakeWriter:
     def __init__(self, config):
         self.config = config
@@ -46,6 +64,29 @@ class FakeWriter:
         return VALID_PART_3
 
     def unload(self):
+        return None
+
+
+class ReusableWriter:
+    instances = []
+
+    def __init__(self, config):
+        self.config = config
+        self.calls = 0
+        self.unload_calls = 0
+        ReusableWriter.instances.append(self)
+
+    def generate_part(self, messages):
+        self.calls += 1
+        step_index = ((self.calls - 1) % 3) + 1
+        if step_index == 1:
+            return VALID_PART_1
+        if step_index == 2:
+            return VALID_PART_2
+        return VALID_PART_3
+
+    def unload(self, clear_cache=False):
+        self.unload_calls += 1
         return None
 
 
@@ -142,6 +183,42 @@ class PipelineTests(unittest.TestCase):
             ]
             for filename in expected_files:
                 self.assertTrue((result.run_dir / filename).exists(), filename)
+
+    def test_pipeline_reuses_provider_instances_across_runs(self):
+        ReusableDescriber.instances = []
+        ReusableWriter.instances = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            pipeline = KidStoryPipeline(
+                config=GenerationConfig(outputs_root=root / "outputs"),
+                describer_factory=ReusableDescriber,
+                writer_factory=ReusableWriter,
+            )
+            pipeline.create_story_draft(self._create_input_file(root))
+            pipeline.create_story_draft(self._create_input_file(root))
+
+            self.assertEqual(len(ReusableDescriber.instances), 1)
+            self.assertEqual(len(ReusableWriter.instances), 1)
+            self.assertEqual(ReusableDescriber.instances[0].describe_calls, 2)
+            self.assertEqual(ReusableWriter.instances[0].calls, 6)
+            self.assertEqual(ReusableDescriber.instances[0].unload_calls, 0)
+            self.assertEqual(ReusableWriter.instances[0].unload_calls, 0)
+
+    def test_pipeline_can_clear_loaded_models(self):
+        ReusableDescriber.instances = []
+        ReusableWriter.instances = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            pipeline = KidStoryPipeline(
+                config=GenerationConfig(outputs_root=root / "outputs"),
+                describer_factory=ReusableDescriber,
+                writer_factory=ReusableWriter,
+            )
+            pipeline.create_story_draft(self._create_input_file(root))
+            pipeline.clear_loaded_models()
+
+            self.assertEqual(ReusableDescriber.instances[0].unload_calls, 1)
+            self.assertEqual(ReusableWriter.instances[0].unload_calls, 1)
 
 
 if __name__ == "__main__":

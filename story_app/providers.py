@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import gc
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ from PIL import Image
 
 from .config import GenerationConfig
 from .schemas import ValidationError
+
+_MODEL_CACHE_ATTR = "_bedtime_story_ai_model_cache"
 
 
 def _clear_torch_memory() -> None:
@@ -27,6 +30,20 @@ def _torch_dtype():
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
+def _get_model_cache() -> dict[tuple[str, str, str], dict[str, Any]]:
+    cache = getattr(builtins, _MODEL_CACHE_ATTR, None)
+    if cache is None:
+        cache = {}
+        setattr(builtins, _MODEL_CACHE_ATTR, cache)
+    return cache
+
+
+def clear_cached_models() -> None:
+    cache = _get_model_cache()
+    cache.clear()
+    _clear_torch_memory()
+
+
 class Qwen2VLImageDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
@@ -42,6 +59,14 @@ class Qwen2VLImageDescriber:
         from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        cache_key = ("image_describer", self.config.models.image_describer, self.device)
+        cached = _get_model_cache().get(cache_key)
+        if cached is not None:
+            print(f"[describe] Reusing cached model: {self.config.models.image_describer} on {self.device}")
+            self.processor = cached["processor"]
+            self.model = cached["model"]
+            return
+
         print(f"[describe] Loading model: {self.config.models.image_describer} on {self.device}")
         self.processor = AutoProcessor.from_pretrained(self.config.models.image_describer)
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
@@ -51,6 +76,10 @@ class Qwen2VLImageDescriber:
         )
         if not torch.cuda.is_available():
             self.model.to(self.device)
+        _get_model_cache()[cache_key] = {
+            "processor": self.processor,
+            "model": self.model,
+        }
 
     def describe(self, image_path: str | Path, prompt_text: str) -> str:
         self._load()
@@ -125,10 +154,17 @@ class Qwen2VLImageDescriber:
             )
         return decoded
 
-    def unload(self) -> None:
+    def unload(self, clear_cache: bool = False) -> None:
+        if clear_cache:
+            cache_key = ("image_describer", self.config.models.image_describer, self.device)
+            _get_model_cache().pop(cache_key, None)
+            self.processor = None
+            self.model = None
+            _clear_torch_memory()
+            return
+
         self.processor = None
         self.model = None
-        _clear_torch_memory()
 
 
 class QwenStoryWriter:
@@ -144,6 +180,15 @@ class QwenStoryWriter:
 
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        cache_key = ("story_writer", self.config.models.story_writer, self.device)
+        cached = _get_model_cache().get(cache_key)
+        if cached is not None:
+            print(f"[story] Reusing cached model: {self.config.models.story_writer} on {self.device}")
+            self.tokenizer = cached["tokenizer"]
+            self.model = cached["model"]
+            return
 
         model_kwargs: dict[str, Any] = {"device_map": "auto"}
         if torch.cuda.is_available():
@@ -172,10 +217,10 @@ class QwenStoryWriter:
         self.model.generation_config.temperature = None
         self.model.generation_config.top_p = None
         self.model.generation_config.top_k = None
-        try:
-            self.device = str(next(self.model.parameters()).device)
-        except StopIteration:
-            self.device = "cpu"
+        _get_model_cache()[cache_key] = {
+            "tokenizer": self.tokenizer,
+            "model": self.model,
+        }
 
     def generate_part(self, messages: list[dict[str, Any]]) -> str:
         self._load()
@@ -226,7 +271,14 @@ class QwenStoryWriter:
             )
         return decoded
 
-    def unload(self) -> None:
+    def unload(self, clear_cache: bool = False) -> None:
+        if clear_cache:
+            cache_key = ("story_writer", self.config.models.story_writer, self.device)
+            _get_model_cache().pop(cache_key, None)
+            self.tokenizer = None
+            self.model = None
+            _clear_torch_memory()
+            return
+
         self.tokenizer = None
         self.model = None
-        _clear_torch_memory()
