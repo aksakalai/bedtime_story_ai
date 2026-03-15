@@ -4,13 +4,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-story-drafting-v11-20260315"
+APP_BUILD = "phase1-story-drafting-v10-20260315"
 
 
 @dataclass(frozen=True)
 class ModelIds:
-    image_describer: str = "google/gemma-3-4b-it"
-    story_writer: str = "google/gemma-3-4b-it"
+    image_describer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
+    story_writer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
 
 
 @dataclass(frozen=True)
