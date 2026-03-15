@@ -319,7 +319,7 @@ class FFmpegVideoAssembler:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         panel_top = self.config.video_height - panel_height
         filter_graph = (
-            f"scale={self.config.video_width}:{self.config.video_height}:force_original_aspect_ratio=cover,"
+            f"scale={self.config.video_width}:{self.config.video_height}:force_original_aspect_ratio=increase,"
             f"crop={self.config.video_width}:{self.config.video_height},"
             f"drawbox=x=0:y={panel_top}:w=iw:h={panel_height}:"
             f"color=0x{self.config.overlay_panel_color_hex}@{self.config.overlay_panel_opacity}:t=fill,"
