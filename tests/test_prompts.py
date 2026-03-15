@@ -15,11 +15,12 @@ from story_app.schemas import ValidationError
 
 
 class PromptTests(unittest.TestCase):
-    def test_build_description_prompt_targets_scene_not_artwork(self):
+    def test_build_description_prompt_targets_rich_scene_detail_not_meta_commentary(self):
         prompt = build_description_prompt(DEFAULT_CONFIG)
-        self.assertIn("Describe only the scene depicted in it", prompt)
-        self.assertIn("directly visible scene details", prompt)
-        self.assertIn("Do not mention the drawing, the artist, style", prompt)
+        self.assertIn("Describe the visible scene in one rich, precise paragraph", prompt)
+        self.assertIn("Include as many directly visible, uniquely identifiable details as possible", prompt)
+        self.assertIn("Prefer exact scene details over broad summaries", prompt)
+        self.assertIn("Do not mention the image itself, the medium, the artist, style", prompt)
         self.assertIn("If a detail is not clearly visible, leave it out", prompt)
 
     def test_build_story_part_1_prompt_uses_scene_as_only_source_of_facts(self):
@@ -31,6 +32,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("blue house with a red roof", prompt)
         self.assertIn("only source of story facts", prompt)
         self.assertIn("Begin inside the exact same scene", prompt)
+        self.assertIn("actively and specifically", prompt)
         self.assertIn("Do not introduce any new character, object, scenery element, location", prompt)
         self.assertIn("small gentle point of curiosity", prompt)
         self.assertIn("Do not mention AI, prompts, instructions", prompt)
@@ -47,6 +49,7 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[3]["role"], "user")
         self.assertEqual(messages[3]["content"], PART_2_USER_PROMPT)
         self.assertIn("Stay in the same scene", messages[3]["content"])
+        self.assertIn("Keep reusing the specific scene details", messages[3]["content"])
         self.assertIn("Do not introduce any new character, object, scenery element, location", messages[3]["content"])
         self.assertIn("time jump", messages[3]["content"])
 
@@ -63,6 +66,7 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[5]["role"], "user")
         self.assertEqual(messages[5]["content"], PART_3_USER_PROMPT)
         self.assertIn("Stay in the same scene", messages[5]["content"])
+        self.assertIn("Keep reusing the specific scene details", messages[5]["content"])
         self.assertIn("End with a calm, hopeful, bedtime-safe feeling", messages[5]["content"])
         self.assertIn("time jump", messages[5]["content"])
 
