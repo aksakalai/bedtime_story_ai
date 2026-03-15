@@ -12,7 +12,7 @@ from story_app.schemas import ValidationError
 
 class PromptTests(unittest.TestCase):
     def test_build_description_prompt_uses_clean_caption_prefix(self):
-        self.assertEqual(build_description_prompt(DEFAULT_CONFIG), "a child's drawing of")
+        self.assertEqual(build_description_prompt(DEFAULT_CONFIG), "a detailed colorful child's drawing of")
 
     def test_build_story_part_1_prompt_includes_description_and_beginning_instruction(self):
         prompt = build_story_part_prompt(
@@ -23,6 +23,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Drawing description:", prompt)
         self.assertIn("A rabbit stands by a moonlit pond.", prompt)
         self.assertIn("first part of the story", prompt)
+        self.assertIn("most visible details from the drawing", prompt)
         self.assertNotIn("Accepted story so far:", prompt)
 
     def test_build_story_part_2_prompt_includes_part_1_exactly(self):
@@ -34,6 +35,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Accepted story so far:", prompt)
         self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
         self.assertIn("second part of the same story", prompt)
+        self.assertIn("specific gentle event", prompt)
 
     def test_build_story_part_3_prompt_includes_part_1_and_part_2(self):
         prompt = build_story_part_prompt(
@@ -47,6 +49,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
         self.assertIn("2. He watched silver ripples drift across the pond and listened to the reeds.", prompt)
         self.assertIn("third and final part", prompt)
+        self.assertIn("Resolve the middle event clearly", prompt)
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):

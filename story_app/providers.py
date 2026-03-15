@@ -68,7 +68,7 @@ class BlipImageDescriber:
                 **prepared_inputs,
                 max_new_tokens=self.config.description_max_tokens,
                 do_sample=False,
-                num_beams=2,
+                num_beams=4,
                 no_repeat_ngram_size=3,
                 repetition_penalty=1.1,
             )

@@ -18,5 +18,5 @@ python -m story_app
 
 ## Models
 
-- Description: `Salesforce/blip-image-captioning-base`
+- Description: `Salesforce/blip-image-captioning-large`
 - Story drafting: `Qwen/Qwen2.5-1.5B-Instruct`
