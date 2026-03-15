@@ -18,5 +18,5 @@ python -m story_app
 
 ## Models
 
-- Description: `llava-hf/llava-onevision-qwen2-0.5b-ov-hf`
+- Description: `Qwen/Qwen2-VL-2B-Instruct`
 - Story drafting: `Qwen/Qwen2.5-1.5B-Instruct`

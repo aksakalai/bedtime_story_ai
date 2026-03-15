@@ -26,7 +26,7 @@ def _torch_dtype():
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-class VisionLanguageImageDescriber:
+class Qwen2VLImageDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"
@@ -38,25 +38,18 @@ class VisionLanguageImageDescriber:
             return
 
         import torch
-        from transformers import AutoProcessor
-
-        try:
-            from transformers import AutoModelForImageTextToText
-
-            model_class = AutoModelForImageTextToText
-        except ImportError:
-            from transformers import AutoModelForVision2Seq
-
-            model_class = AutoModelForVision2Seq
+        from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[describe] Loading model: {self.config.models.image_describer} on {self.device}")
         self.processor = AutoProcessor.from_pretrained(self.config.models.image_describer)
-        self.model = model_class.from_pretrained(
+        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             self.config.models.image_describer,
-            torch_dtype=_torch_dtype(),
+            torch_dtype="auto",
+            device_map="auto" if torch.cuda.is_available() else None,
         )
-        self.model.to(self.device)
+        if not torch.cuda.is_available():
+            self.model.to(self.device)
 
     def describe(self, image_path: str | Path, prompt_text: str) -> str:
         self._load()
@@ -76,20 +69,22 @@ class VisionLanguageImageDescriber:
             ]
             rendered_prompt = self.processor.apply_chat_template(
                 messages,
+                tokenize=False,
                 add_generation_prompt=True,
             )
             model_inputs = self.processor(
-                text=rendered_prompt,
+                text=[rendered_prompt],
                 images=[image],
+                padding=True,
                 return_tensors="pt",
             )
 
         prepared_inputs: dict[str, Any] = {}
         for key, value in model_inputs.items():
-            if getattr(value, "dtype", None) is not None and value.dtype.is_floating_point:
-                prepared_inputs[key] = value.to(self.device, dtype=_torch_dtype())
-            else:
-                prepared_inputs[key] = value.to(self.device)
+            prepared_inputs[key] = value.to(self.device)
+
+        prompt_token_count = int(prepared_inputs["input_ids"].shape[1])
+        print(f"[describe] Prompt token count: {prompt_token_count}")
 
         generated_ids = self.model.generate(
             **prepared_inputs,
@@ -98,7 +93,14 @@ class VisionLanguageImageDescriber:
         )
         prompt_length = prepared_inputs["input_ids"].shape[1]
         completion = generated_ids[:, prompt_length:]
-        return self.processor.batch_decode(completion, skip_special_tokens=True)[0].strip()
+        decoded = self.processor.batch_decode(
+            completion,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )[0].strip()
+        print(f"[describe] Output word count: {len(decoded.split())}")
+        print(f"[describe] Output preview: {decoded[:240]}")
+        return decoded
 
     def unload(self) -> None:
         self.processor = None
