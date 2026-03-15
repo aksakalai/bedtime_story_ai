@@ -148,9 +148,9 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", FakeWriter
-            ), patch("story_app.pipeline.SSD1BSceneGenerator", ShouldNotStartImageGenerator), patch(
+            ), patch("story_app.pipeline.SDTurboSceneGenerator", ShouldNotStartImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", _BaseFakeNarrator
             ):
                 pipeline = KidStoryPipeline(config)
@@ -180,9 +180,9 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
-            ), patch("story_app.pipeline.SSD1BSceneGenerator", FakeImageGenerator), patch(
+            ), patch("story_app.pipeline.SDTurboSceneGenerator", FakeImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", ShouldNotNarrate
             ):
                 pipeline = KidStoryPipeline(config)
@@ -215,9 +215,9 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
-            ), patch("story_app.pipeline.SSD1BSceneGenerator", _BaseFakeImageGenerator), patch(
+            ), patch("story_app.pipeline.SDTurboSceneGenerator", _BaseFakeImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", FakeNarrator
             ), patch("story_app.pipeline.render_story_video", side_effect=should_not_render):
                 pipeline = KidStoryPipeline(config)
@@ -229,9 +229,9 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.BlipDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
-            ), patch("story_app.pipeline.SSD1BSceneGenerator", _BaseFakeImageGenerator), patch(
+            ), patch("story_app.pipeline.SDTurboSceneGenerator", _BaseFakeImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", _BaseFakeNarrator
             ), patch("story_app.pipeline.render_story_video", side_effect=_fake_render_story_video):
                 pipeline = KidStoryPipeline(config)

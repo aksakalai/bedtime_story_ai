@@ -8,7 +8,7 @@ from .assets import RunPaths, build_run_manifest, prepare_run_paths, write_json
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .playback import build_playback_panel_html, build_timeline
 from .prompts import build_story_markdown
-from .providers import FlorenceDrawingDescriber, KokoroNarrator, QwenStoryWriter, SSD1BSceneGenerator
+from .providers import BlipDrawingDescriber, KokoroNarrator, QwenStoryWriter, SDTurboSceneGenerator
 from .schemas import EXPECTED_SCENE_GOALS, DrawingDescription, PipelineResult, StoryPackage
 from .video import render_story_video
 
@@ -110,7 +110,7 @@ class KidStoryPipeline:
         print(f"[pipeline] Description prompt path: {run_paths.description_prompt_path}")
         print(f"[pipeline] Story prompt path: {run_paths.story_prompt_path}")
 
-        describer = FlorenceDrawingDescriber(self.config)
+        describer = BlipDrawingDescriber(self.config)
         try:
             self._notify(progress_callback, 0.12, "Describing the drawing")
             description = describer.describe(
@@ -156,7 +156,7 @@ class KidStoryPipeline:
         finally:
             writer.unload()
 
-        image_generator = SSD1BSceneGenerator(self.config)
+        image_generator = SDTurboSceneGenerator(self.config)
         try:
             self._notify(progress_callback, 0.56, "Generating storybook scenes")
             story = image_generator.generate(story, run_paths.images_dir)

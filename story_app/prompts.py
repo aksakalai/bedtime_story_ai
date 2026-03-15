@@ -24,7 +24,7 @@ def _word_count(text: str) -> int:
 
 
 def build_description_prompt(_config: GenerationConfig) -> str:
-    return "<DETAILED_CAPTION>"
+    return "a detailed drawing of"
 
 
 def build_story_prompt(description: DrawingDescription, config: GenerationConfig) -> str:
@@ -45,6 +45,8 @@ def build_story_prompt(description: DrawingDescription, config: GenerationConfig
         Rules:
         - English only.
         - Keep the same core characters and setting from the drawing description.
+        - Stay visually grounded in the drawing description.
+        - Do not invent organizations, biographies, or backstory that are not supported by the drawing description.
         - Part 1 must be the entrance.
         - Part 2 must be the buildup.
         - Part 3 must be the ending.
@@ -66,6 +68,22 @@ def parse_description_response(raw_text: str, config: GenerationConfig) -> Drawi
         raise SchemaError(
             f"Description must contain at least {config.min_description_words} words."
         )
+    if re.search(r"<[^>]+>", text):
+        raise SchemaError("Description contained unresolved special tokens.")
+
+    tokens = text.split()
+    suspicious_tokens = [
+        token
+        for token in tokens
+        if (
+            sum(character.isdigit() for character in token) >= 2
+            or len(token) > 24
+            or "<" in token
+            or ">" in token
+        )
+    ]
+    if suspicious_tokens and len(suspicious_tokens) / len(tokens) > 0.15:
+        raise SchemaError("Description looked corrupted or badly tokenized.")
     return DrawingDescription(text=text)
 
 
@@ -109,10 +127,7 @@ def parse_story_response(raw_text: str, config: GenerationConfig) -> StoryPackag
 
 
 def build_character_bible(description: DrawingDescription) -> str:
-    return (
-        f"storybook illustration, same recurring visual world as this drawing description: "
-        f"{_clip_words(description.text, 40)}"
-    )
+    return _clip_words(description.text, 18)
 
 
 def enrich_story_with_image_prompts(
@@ -120,13 +135,13 @@ def enrich_story_with_image_prompts(
     description: DrawingDescription,
     config: GenerationConfig,
 ) -> StoryPackage:
-    description_context = build_character_bible(description)
+    description_context = _clip_words(description.text, config.image_prompt_description_words)
     enriched_parts: list[StoryPart] = []
     for index, part in enumerate(story.parts, start=1):
-        scene_focus = _clip_words(part.story_text, 24)
+        scene_focus = _clip_words(part.story_text, config.image_prompt_story_words)
         prompt = (
-            f"{description_context}, scene {index}, {part.scene_goal}, "
-            f"scene details: {scene_focus}, bedtime mood, cohesive children's book art, no text"
+            f"storybook children's illustration, scene {index}, {part.scene_goal} scene, "
+            f"{description_context}, {scene_focus}, warm gentle bedtime mood, soft picture-book art, no text"
         )
         enriched_parts.append(
             StoryPart(

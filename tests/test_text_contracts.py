@@ -19,6 +19,13 @@ class TextContractTests(unittest.TestCase):
         with self.assertRaises(SchemaError):
             parse_description_response("House. Trees. Sun. Car.", DEFAULT_CONFIG)
 
+    def test_parse_description_response_rejects_corrupted_special_tokens(self):
+        with self.assertRaises(SchemaError):
+            parse_description_response(
+                "madeupword0002 DepthInterface<loc_471>quet negotiations Shir prayers diagnostic 670Chel",
+                DEFAULT_CONFIG,
+            )
+
     def test_parse_story_response_reads_title_and_three_parts(self):
         raw_text = "\n".join(
             [

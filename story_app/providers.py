@@ -38,7 +38,7 @@ def _preview_text(raw_text: str, limit: int = 600) -> str:
     return text[:limit] + ("..." if len(text) > limit else "")
 
 
-class FlorenceDrawingDescriber:
+class BlipDrawingDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.processor: Any | None = None
@@ -50,16 +50,12 @@ class FlorenceDrawingDescriber:
             return
 
         import torch
-        from transformers import AutoProcessor, Florence2ForConditionalGeneration
+        from transformers import BlipForConditionalGeneration, BlipProcessor
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[describe] Loading model: {self.config.models.drawing_describer} on {self.device}")
-        self.processor = AutoProcessor.from_pretrained(
-            self.config.models.drawing_describer,
-            trust_remote_code=False,
-            use_fast=False,
-        )
-        self.model = Florence2ForConditionalGeneration.from_pretrained(
+        self.processor = BlipProcessor.from_pretrained(self.config.models.drawing_describer)
+        self.model = BlipForConditionalGeneration.from_pretrained(
             self.config.models.drawing_describer,
             torch_dtype=_torch_dtype(),
         )
@@ -74,38 +70,23 @@ class FlorenceDrawingDescriber:
 
         with Image.open(image_path) as image:
             image = image.convert("RGB")
-            model_inputs = self.processor(
-                text=prompt,
-                images=image,
-                return_tensors="pt",
-            )
-            pixel_values = model_inputs["pixel_values"].to(self.device, dtype=_torch_dtype())
-            input_ids = model_inputs["input_ids"].to(self.device)
-            attention_mask = model_inputs.get("attention_mask")
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(self.device)
+            model_inputs = self.processor(images=image, text=prompt, return_tensors="pt")
+            prepared_inputs: dict[str, Any] = {}
+            for key, value in model_inputs.items():
+                if getattr(value, "dtype", None) is not None and value.dtype.is_floating_point:
+                    prepared_inputs[key] = value.to(self.device, dtype=_torch_dtype())
+                else:
+                    prepared_inputs[key] = value.to(self.device)
 
             generated_ids = self.model.generate(
-                input_ids=input_ids,
-                pixel_values=pixel_values,
-                attention_mask=attention_mask,
+                **prepared_inputs,
                 max_new_tokens=max_new_tokens,
-                num_beams=3,
+                num_beams=4,
                 do_sample=False,
+                no_repeat_ngram_size=3,
+                repetition_penalty=1.1,
             )
-
-            generated_text = self.processor.batch_decode(
-                generated_ids,
-                skip_special_tokens=False,
-            )[0]
-            parsed = self.processor.post_process_generation(
-                generated_text,
-                task=prompt,
-                image_size=(image.width, image.height),
-            )
-        if isinstance(parsed, dict):
-            return str(parsed.get(prompt, "")).strip()
-        return str(parsed).strip()
+        return self.processor.decode(generated_ids[0], skip_special_tokens=True).strip()
 
     def describe(
         self,
@@ -245,7 +226,7 @@ class QwenStoryWriter:
         _clear_torch_memory()
 
 
-class SSD1BSceneGenerator:
+class SDTurboSceneGenerator:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.pipeline: Any | None = None
@@ -256,25 +237,25 @@ class SSD1BSceneGenerator:
             return
 
         import torch
-        from diffusers import StableDiffusionXLPipeline
+        from diffusers import AutoPipelineForText2Image
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         load_kwargs: dict[str, Any] = {
             "torch_dtype": _torch_dtype(),
-            "use_safetensors": True,
         }
         if self.device == "cuda":
             load_kwargs["variant"] = "fp16"
+            load_kwargs["use_safetensors"] = True
 
-        self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+        self.pipeline = AutoPipelineForText2Image.from_pretrained(
             self.config.models.scene_generator,
             **load_kwargs,
         )
         self.pipeline.enable_attention_slicing()
         if hasattr(self.pipeline, "vae") and hasattr(self.pipeline.vae, "enable_slicing"):
             self.pipeline.vae.enable_slicing()
-
-        self.pipeline = self.pipeline.to(self.device)
+        if self.device == "cuda":
+            self.pipeline = self.pipeline.to(self.device)
 
     def generate(self, story: StoryPackage, images_dir: Path) -> StoryPackage:
         self._load()
@@ -293,7 +274,6 @@ class SSD1BSceneGenerator:
 
             result = self.pipeline(
                 prompt=part.image_prompt,
-                negative_prompt=self.config.image_negative_prompt,
                 width=self.config.image_width,
                 height=self.config.image_height,
                 num_inference_steps=self.config.diffusion_steps,

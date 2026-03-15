@@ -8,7 +8,7 @@ import gradio as gr
 from .pipeline import KidStoryPipeline
 from .schemas import StoryPackage
 
-APP_BUILD = "deterministic-v2-20260315"
+APP_BUILD = "deterministic-v3-20260315"
 
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
@@ -113,7 +113,7 @@ INTRO_HTML = """
 <div class="hero-card">
   <h1>Kid Drawing to Bedtime Story</h1>
   <p>Upload one drawing and the app will turn it into a calm three-part bedtime story, three matching illustrations, spoken narration, and one final story video with built-in playback controls.</p>
-  <p><strong>Build:</strong> deterministic-v2-20260315</p>
+  <p><strong>Build:</strong> deterministic-v3-20260315</p>
 </div>
 """
 
@@ -163,6 +163,11 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         (part.image_path, f"Part {index}: {part.scene_goal}")
         for index, part in enumerate(result.story.parts, start=1)
     ]
+    raw_story_response = Path(result.manifest.story_response_path).read_text(encoding="utf-8")
+    scene_prompts = "\n\n".join(
+        f"Part {index} ({part.scene_goal}):\n{part.image_prompt}"
+        for index, part in enumerate(result.story.parts, start=1)
+    )
     return (
         status,
         result.story.title,
@@ -173,6 +178,9 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         result.narration_audio_path,
         result.manifest_path,
         str(Path(result.run_dir).resolve()),
+        result.description.text,
+        raw_story_response,
+        scene_prompts,
     )
 
 
@@ -210,6 +218,24 @@ def build_demo() -> gr.Blocks:
                     run_dir_output = gr.Textbox(label="Run directory", interactive=False)
 
             with gr.Row():
+                with gr.Accordion("Debug Strings", open=False):
+                    description_output = gr.Textbox(
+                        label="Drawing description",
+                        lines=4,
+                        interactive=False,
+                    )
+                    raw_story_output = gr.Textbox(
+                        label="Raw story model response",
+                        lines=10,
+                        interactive=False,
+                    )
+                    image_prompts_output = gr.Textbox(
+                        label="Scene image prompts",
+                        lines=10,
+                        interactive=False,
+                    )
+
+            with gr.Row():
                 with gr.Column():
                     gr.Markdown("## Storyboard", elem_classes=["section-title"])
                     storyboard_output = gr.HTML()
@@ -232,6 +258,9 @@ def build_demo() -> gr.Blocks:
                     audio_output,
                     manifest_output,
                     run_dir_output,
+                    description_output,
+                    raw_story_output,
+                    image_prompts_output,
                 ],
             )
 
