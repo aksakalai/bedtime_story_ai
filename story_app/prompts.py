@@ -7,21 +7,23 @@ from .config import GenerationConfig
 from .schemas import ValidationError
 
 STORY_SYSTEM_PROMPT = (
-    "You write only gentle bedtime-story prose grounded in the provided scene. Keep every part in the same setting "
-    "and close to the visible details. Build from the description and the earlier story instead of inventing "
-    "unrelated elements. Do not add major new characters, named companions, locations, props, backstory, or time "
-    "jumps unless they clearly grow out of the described scene. Reply only with the story text. Do not include "
-    "explanations, labels, or meta commentary."
+    "You write only gentle bedtime-story prose. The scene description is the only source of world facts. Build the "
+    "story strictly from the described scene and keep all three parts grounded in it. Use only the characters, "
+    "animals, objects, colors, and scenery that appear in the description. Do not introduce any new character, "
+    "creature, object, scenery element, location, off-screen space, backstory fact, or time jump that is not "
+    "supported by the description. You may add only light actions, feelings, and narrative links that naturally "
+    "involve the already described elements. Reply only with the story text. Do not include explanations, labels, or "
+    "meta commentary."
 )
 
 PART_2_USER_PROMPT = (
     "Write only part 2 of the same bedtime story.\n\n"
     "Requirements:\n"
-    "- Continue directly from part 1 in the same setting and the same moment or an immediate continuation.\n"
-    "- Keep using the same visible objects, scenery, and mood already established.\n"
-    "- Build one gentle event, discovery, mystery, or small adventure from those existing details.\n"
-    "- Do not introduce major new characters, locations, props, or unrelated themes.\n"
-    "- Avoid sudden time jumps.\n"
+    "- Continue directly from part 1.\n"
+    "- Stay in the same scene described at the start of the conversation.\n"
+    "- Build one gentle development using only elements already present in the description and part 1.\n"
+    "- Do not introduce any new character, object, scenery element, location, off-screen space, or time jump.\n"
+    "- Keep the tone calm, clear, and bedtime-safe.\n"
     "- Aim for roughly 45 to 65 words.\n"
     "- Write only the story text."
 )
@@ -29,11 +31,11 @@ PART_2_USER_PROMPT = (
 PART_3_USER_PROMPT = (
     "Write only part 3 of the same bedtime story.\n\n"
     "Requirements:\n"
-    "- Continue directly from part 2 in the same setting and the same moment or an immediate continuation.\n"
-    "- Resolve the gentle event using the same scene and details already established.\n"
-    "- Do not introduce major new characters, locations, props, or unrelated themes.\n"
+    "- Continue directly from part 2.\n"
+    "- Stay in the same scene described at the start of the conversation.\n"
+    "- Resolve the gentle development using only elements already present in the description and earlier parts.\n"
+    "- Do not introduce any new character, object, scenery element, location, off-screen space, or time jump.\n"
     "- End with a calm, hopeful, bedtime-safe feeling.\n"
-    "- Avoid sudden time jumps.\n"
     "- Aim for roughly 45 to 65 words.\n"
     "- Write only the story text."
 )
@@ -52,21 +54,21 @@ def build_description_prompt(config: GenerationConfig) -> str:
 
 def build_story_part_1_prompt(description_text: str) -> str:
     return (
-        "The goal is to write part 1 of a three-part bedtime story grounded in the scene described below.\n\n"
-        f"Description of the image:\n{description_text}\n\n"
+        "Write only part 1 of a three-part bedtime story based on the scene description below.\n\n"
+        f"Scene description:\n{description_text}\n\n"
         "Requirements:\n"
-        "- Part 1 should feel like the opening scene of a story, not a caption or checklist.\n"
-        "- Stay tightly anchored to the exact setting and visible details from the description.\n"
-        "- Use the distinctive objects, colors, and spatial relationships naturally in the prose.\n"
-        "- Do not copy the description sentence by sentence.\n"
-        "- Do not introduce major new characters, locations, or props.\n"
-        "- If no character is clearly visible, you may use one gentle unnamed focal character or softly personify an existing visible element, but do not add a cast.\n"
-        "- End with a small point of curiosity that naturally leads into part 2.\n"
+        "- Treat the scene description as the only source of story facts.\n"
+        "- Begin inside the exact same scene.\n"
+        "- Use the visible elements and uniquely identifiable details naturally in story prose.\n"
+        "- Let part 1 feel like an opening moment of a story, not a summary of the description.\n"
+        "- Do not introduce any new character, object, scenery element, location, or off-screen space that is not in the description.\n"
+        "- You may add only light actions or feelings that naturally fit the already described scene.\n"
+        "- End with a small gentle point of curiosity that can continue into part 2.\n"
         "- Keep the tone warm, calm, and bedtime-safe.\n"
         "- Aim for roughly 45 to 65 words.\n"
         "- Reply only with the story itself.\n"
-        "- Do not mention AI, prompts, instructions, or that this comes from a drawing.\n"
-        "\nNow write only part 1 of the story."
+        "- Do not mention AI, prompts, instructions, or that the source was a drawing.\n"
+        "\nNow write only part 1."
     )
 
 
