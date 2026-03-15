@@ -6,35 +6,30 @@ from typing import Any
 from .config import GenerationConfig
 from .schemas import ValidationError
 
-STORY_SYSTEM_PROMPT = (
-    "You write concise, gentle bedtime-story prose. The scene description is the whole story world. Use only details "
-    "explicit in that description. Add only small actions and feelings tied to those details. Do not add new "
-    "characters, creatures, objects, places, off-screen space, backstory, or time jumps. Reply only with the story "
+MULTIMODAL_SYSTEM_PROMPT = (
+    "You carefully observe the image and follow the current request. When asked for a description, write only a "
+    "grounded description of visible scene details. When asked for a story part, write only gentle bedtime-story "
+    "prose that stays faithful to the same image and the earlier conversation. Reply only with the requested text. "
+    "Do not add labels or meta commentary."
+)
+
+DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
+
+PART_1_USER_PROMPT = (
+    "Using the same image and your description above, write only part 1 of a gentle three-part bedtime story. Keep "
+    "it grounded in the visible scene, warm, concise, and clean. Write about 50 words. Reply only with the story "
     "text."
 )
 
 PART_2_USER_PROMPT = (
-    "Write only part 2 of the same bedtime story.\n\n"
-    "Requirements:\n"
-    "- Continue directly from part 1.\n"
-    "- Stay in the exact same scene.\n"
-    "- Build one small gentle development using only details explicit in the description and part 1.\n"
-    "- Do not add any new detail not explicit in the description.\n"
-    "- Keep it calm and bedtime-safe.\n"
-    "- Write about 50 words.\n"
-    "- Write only the story text."
+    "Using the same image and the story so far, write only part 2 of the same bedtime story. Continue directly, stay "
+    "grounded in the visible scene, keep it gentle, and write about 50 words. Reply only with the story text."
 )
 
 PART_3_USER_PROMPT = (
-    "Write only part 3 of the same bedtime story.\n\n"
-    "Requirements:\n"
-    "- Continue directly from part 2.\n"
-    "- Stay in the exact same scene.\n"
-    "- Resolve the gentle development using only details explicit in the description and earlier parts.\n"
-    "- Do not add any new detail not explicit in the description.\n"
-    "- End with a calm, hopeful, bedtime-safe feeling.\n"
-    "- Write about 50 words.\n"
-    "- Write only the story text."
+    "Using the same image and the story so far, write only part 3 of the same bedtime story. Continue directly, keep "
+    "it grounded in the visible scene, end with a calm hopeful feeling, and write about 50 words. Reply only with "
+    "the story text."
 )
 
 
@@ -49,34 +44,31 @@ def build_description_prompt(config: GenerationConfig) -> str:
     return config.description_prompt_prefix
 
 
-def build_story_part_1_prompt(description_text: str) -> str:
-    return (
-        "Write only part 1 of a three-part bedtime story based on the scene description below.\n\n"
-        f"Scene description:\n{description_text}\n\n"
-        "Requirements:\n"
-        "- Treat the scene description as the whole story world.\n"
-        "- Begin in the exact same scene.\n"
-        "- Use the specific described details actively in the story prose.\n"
-        "- Let part 1 feel like the opening moment of a story, not a summary.\n"
-        "- Do not add any new detail not explicit in the description.\n"
-        "- Add only small actions or feelings that directly involve the described elements.\n"
-        "- End with one small gentle point of curiosity that can continue into part 2.\n"
-        "- Keep it warm and bedtime-safe.\n"
-        "- Write about 50 words.\n"
-        "- Reply only with the story itself.\n"
-        "- Do not mention AI, prompts, instructions, or the source of the scene description.\n"
-        "\nNow write only part 1."
-    )
+def build_image_text_content(prompt_text: str) -> list[dict[str, str]]:
+    return [
+        {"type": "image"},
+        {"type": "text", "text": prompt_text},
+    ]
+
+
+def build_description_messages(prompt_text: str) -> list[dict[str, Any]]:
+    return [
+        {"role": "system", "content": MULTIMODAL_SYSTEM_PROMPT},
+        {"role": "user", "content": build_image_text_content(prompt_text)},
+    ]
 
 
 def build_story_messages(
     *,
+    description_prompt: str,
     description_text: str,
     previous_parts: list[str],
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": STORY_SYSTEM_PROMPT},
-        {"role": "user", "content": build_story_part_1_prompt(description_text)},
+        {"role": "system", "content": MULTIMODAL_SYSTEM_PROMPT},
+        {"role": "user", "content": build_image_text_content(description_prompt)},
+        {"role": "assistant", "content": description_text},
+        {"role": "user", "content": build_image_text_content(PART_1_USER_PROMPT)},
     ]
 
     if not previous_parts:
@@ -85,20 +77,35 @@ def build_story_messages(
     messages.append({"role": "assistant", "content": previous_parts[0]})
 
     if len(previous_parts) == 1:
-        messages.append({"role": "user", "content": PART_2_USER_PROMPT})
+        messages.append({"role": "user", "content": build_image_text_content(PART_2_USER_PROMPT)})
         return messages
 
-    messages.append({"role": "user", "content": PART_2_USER_PROMPT})
+    messages.append({"role": "user", "content": build_image_text_content(PART_2_USER_PROMPT)})
     messages.append({"role": "assistant", "content": previous_parts[1]})
-    messages.append({"role": "user", "content": PART_3_USER_PROMPT})
+    messages.append({"role": "user", "content": build_image_text_content(PART_3_USER_PROMPT)})
     return messages
+
+
+def _format_message_content(content: Any) -> str:
+    if isinstance(content, list):
+        lines: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            if item_type == "image":
+                lines.append("[IMAGE]")
+            elif item_type == "text":
+                lines.append(str(item.get("text", "")).strip())
+        return "\n".join(part for part in lines if part).strip()
+    return str(content).strip()
 
 
 def format_story_messages(messages: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for message in messages:
         role = str(message.get("role", "unknown")).upper()
-        content = str(message.get("content", "")).strip()
+        content = _format_message_content(message.get("content", ""))
         lines.append(f"{role}:")
         lines.append(content)
         lines.append("")

@@ -8,77 +8,42 @@ from story_app.schemas import ValidationError
 
 
 VALID_DESCRIPTION = (
-    "A gentle drawing of a small blue house with a red roof beside two green trees and a little blue car under a bright yellow sun."
+    "A small blue house with a red roof stands between two green trees beside a little blue car under a yellow sun."
 )
 VALID_PART_1 = (
-    "Mina stood beside the small blue house with the red roof and watched the bright yellow sun glow above the two green trees. A little blue car rested nearby, and the whole yard felt quiet and welcoming as she wondered what gentle adventure the day might bring."
+    "The small blue house glowed softly under the yellow sun while the little blue car rested between the two green "
+    "trees. Everything felt quiet and warm, and the stillness held one tiny question about what gentle moment might "
+    "begin next."
 )
 VALID_PART_2 = (
-    "A soft breeze shook the two green trees, and Mina noticed a folded paper tucked beneath the little blue car. She picked it up beside the blue house and found a kind note inviting her to follow the warm sunlight to a small surprise waiting in the garden."
+    "A light breeze stirred the two green trees, and the little blue car seemed to wait patiently beside the house. "
+    "The quiet scene felt full of promise, as if the warm sunlight were guiding the whole place toward a tender new "
+    "moment."
 )
 VALID_PART_3 = (
-    "Mina followed the sunlight to the shady spot between the trees, where a basket of sweet berries waited beside the blue house. She smiled at the little blue car, thanked the bright yellow sun for guiding her, and ended the day feeling peaceful and glad."
+    "By evening, the blue house, the two green trees, and the little blue car all rested beneath the fading yellow "
+    "sun. The gentle scene settled into peace, and the day ended with a calm feeling that made everything seem safe "
+    "and still."
 )
 
 
-class FakeDescriber:
-    def __init__(self, config):
-        self.config = config
-
-    def describe(self, image_path, prompt_text):
-        return VALID_DESCRIPTION
-
-    def unload(self):
-        return None
-
-
-class ReusableDescriber:
+class SharedFakeProvider:
     instances = []
 
     def __init__(self, config):
         self.config = config
-        self.describe_calls = 0
+        self.description_calls = 0
+        self.story_calls = 0
         self.unload_calls = 0
-        ReusableDescriber.instances.append(self)
+        SharedFakeProvider.instances.append(self)
 
-    def describe(self, image_path, prompt_text):
-        self.describe_calls += 1
+    def describe(self, image_path, messages):
+        self.description_calls += 1
         return VALID_DESCRIPTION
 
-    def unload(self, clear_cache=False):
-        self.unload_calls += 1
-        return None
-
-
-class FakeWriter:
-    def __init__(self, config):
-        self.config = config
-        self.calls = 0
-
-    def generate_part(self, messages):
-        self.calls += 1
-        if self.calls == 1:
-            return VALID_PART_1
-        if self.calls == 2:
-            return VALID_PART_2
-        return VALID_PART_3
-
-    def unload(self):
-        return None
-
-
-class ReusableWriter:
-    instances = []
-
-    def __init__(self, config):
-        self.config = config
-        self.calls = 0
-        self.unload_calls = 0
-        ReusableWriter.instances.append(self)
-
-    def generate_part(self, messages):
-        self.calls += 1
-        step_index = ((self.calls - 1) % 3) + 1
+    def generate_part(self, image_path, messages):
+        self.story_calls += 1
+        step_index = ((self.story_calls - 1) % 3) + 1
         if step_index == 1:
             return VALID_PART_1
         if step_index == 2:
@@ -90,34 +55,38 @@ class ReusableWriter:
         return None
 
 
-class NonEosDescription:
+class NonEosDescriptionProvider:
     def __init__(self, config):
         self.config = config
 
-    def describe(self, image_path, prompt_text):
+    def describe(self, image_path, messages):
         raise ValidationError("Description generation did not finish naturally before the safety limit.")
 
-    def unload(self):
+    def generate_part(self, image_path, messages):
+        return VALID_PART_1
+
+    def unload(self, clear_cache=False):
         return None
 
 
-class NonEosWriter:
+class NonEosStoryProvider:
     instances = []
 
     def __init__(self, config):
         self.config = config
-        self.calls = 0
-        NonEosWriter.instances.append(self)
+        self.story_calls = 0
+        NonEosStoryProvider.instances.append(self)
 
-    def generate_part(self, messages):
-        self.calls += 1
-        if self.calls == 1:
+    def describe(self, image_path, messages):
+        return VALID_DESCRIPTION
+
+    def generate_part(self, image_path, messages):
+        self.story_calls += 1
+        if self.story_calls == 1:
             return VALID_PART_1
-        if self.calls == 2:
-            raise ValidationError("Story generation did not finish naturally before the safety limit.")
-        return VALID_PART_3
+        raise ValidationError("Story generation did not finish naturally before the safety limit.")
 
-    def unload(self):
+    def unload(self, clear_cache=False):
         return None
 
 
@@ -132,32 +101,33 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=NonEosDescription,
-                writer_factory=FakeWriter,
+                describer_factory=NonEosDescriptionProvider,
+                writer_factory=NonEosDescriptionProvider,
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
 
     def test_pipeline_stops_before_part_3_when_part_2_does_not_finish_with_eos(self):
-        NonEosWriter.instances = []
+        NonEosStoryProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=FakeDescriber,
-                writer_factory=NonEosWriter,
+                describer_factory=NonEosStoryProvider,
+                writer_factory=NonEosStoryProvider,
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
-            self.assertEqual(NonEosWriter.instances[0].calls, 2)
+            self.assertEqual(NonEosStoryProvider.instances[0].story_calls, 2)
 
     def test_pipeline_smoke_path_saves_minimal_story_artifacts(self):
+        SharedFakeProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=FakeDescriber,
-                writer_factory=FakeWriter,
+                describer_factory=SharedFakeProvider,
+                writer_factory=SharedFakeProvider,
             )
             result = pipeline.create_story_draft(self._create_input_file(root))
 
@@ -166,6 +136,8 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(result.part_2_text, VALID_PART_2)
             self.assertEqual(result.part_3_text, VALID_PART_3)
             self.assertIn("SYSTEM:", result.full_conversation_text)
+            self.assertIn("[IMAGE]", result.full_conversation_text)
+            self.assertIn(VALID_DESCRIPTION, result.full_conversation_text)
             self.assertIn(VALID_PART_1, result.full_conversation_text)
             self.assertIn(VALID_PART_2, result.full_conversation_text)
             self.assertIn(VALID_PART_3, result.full_conversation_text)
@@ -184,41 +156,36 @@ class PipelineTests(unittest.TestCase):
             for filename in expected_files:
                 self.assertTrue((result.run_dir / filename).exists(), filename)
 
-    def test_pipeline_reuses_provider_instances_across_runs(self):
-        ReusableDescriber.instances = []
-        ReusableWriter.instances = []
+    def test_pipeline_reuses_single_provider_instance_across_runs(self):
+        SharedFakeProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=ReusableDescriber,
-                writer_factory=ReusableWriter,
+                describer_factory=SharedFakeProvider,
+                writer_factory=SharedFakeProvider,
             )
             pipeline.create_story_draft(self._create_input_file(root))
             pipeline.create_story_draft(self._create_input_file(root))
 
-            self.assertEqual(len(ReusableDescriber.instances), 1)
-            self.assertEqual(len(ReusableWriter.instances), 1)
-            self.assertEqual(ReusableDescriber.instances[0].describe_calls, 2)
-            self.assertEqual(ReusableWriter.instances[0].calls, 6)
-            self.assertEqual(ReusableDescriber.instances[0].unload_calls, 0)
-            self.assertEqual(ReusableWriter.instances[0].unload_calls, 0)
+            self.assertEqual(len(SharedFakeProvider.instances), 1)
+            self.assertEqual(SharedFakeProvider.instances[0].description_calls, 2)
+            self.assertEqual(SharedFakeProvider.instances[0].story_calls, 6)
+            self.assertEqual(SharedFakeProvider.instances[0].unload_calls, 0)
 
     def test_pipeline_can_clear_loaded_models(self):
-        ReusableDescriber.instances = []
-        ReusableWriter.instances = []
+        SharedFakeProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=ReusableDescriber,
-                writer_factory=ReusableWriter,
+                describer_factory=SharedFakeProvider,
+                writer_factory=SharedFakeProvider,
             )
             pipeline.create_story_draft(self._create_input_file(root))
             pipeline.clear_loaded_models()
 
-            self.assertEqual(ReusableDescriber.instances[0].unload_calls, 1)
-            self.assertEqual(ReusableWriter.instances[0].unload_calls, 1)
+            self.assertEqual(SharedFakeProvider.instances[0].unload_calls, 1)
 
 
 if __name__ == "__main__":

@@ -2,12 +2,16 @@ import unittest
 
 from story_app.config import DEFAULT_CONFIG
 from story_app.prompts import (
+    DESCRIPTION_USER_PROMPT_SUFFIX,
+    MULTIMODAL_SYSTEM_PROMPT,
+    PART_1_USER_PROMPT,
     PART_2_USER_PROMPT,
     PART_3_USER_PROMPT,
-    STORY_SYSTEM_PROMPT,
+    build_description_messages,
     build_description_prompt,
+    build_image_text_content,
     build_story_messages,
-    build_story_part_1_prompt,
+    format_story_messages,
     validate_description_text,
     validate_story_part_text,
 )
@@ -15,62 +19,81 @@ from story_app.schemas import ValidationError
 
 
 class PromptTests(unittest.TestCase):
-    def test_build_description_prompt_targets_concise_visible_scene_facts(self):
+    def test_build_description_prompt_targets_visible_scene_only(self):
         prompt = build_description_prompt(DEFAULT_CONFIG)
-        self.assertIn("Describe only the visible scene in one concise paragraph", prompt)
-        self.assertIn("Include uniquely identifiable objects", prompt)
-        self.assertIn("Use only directly visible facts", prompt)
-        self.assertIn("Do not mention the image, medium, artist, style", prompt)
-        self.assertIn("Leave out anything not clearly visible", prompt)
+        self.assertIn("Describe the visible scene in one concise paragraph", prompt)
+        self.assertIn("Include distinctive objects, colors, counts, positions", prompt)
+        self.assertIn("Use only visible facts", prompt)
+        self.assertIn("Reply only with the description text", prompt)
 
-    def test_build_story_part_1_prompt_uses_scene_as_only_source_of_facts(self):
-        prompt = build_story_part_1_prompt(
-            "A blue house with a red roof stands beside two green trees and a blue car."
+    def test_build_description_messages_uses_system_and_image_turn(self):
+        prompt = build_description_prompt(DEFAULT_CONFIG)
+        messages = build_description_messages(prompt)
+
+        self.assertEqual(messages[0]["role"], "system")
+        self.assertEqual(messages[0]["content"], MULTIMODAL_SYSTEM_PROMPT)
+        self.assertEqual(messages[1]["role"], "user")
+        self.assertEqual(
+            messages[1]["content"],
+            build_image_text_content(prompt),
         )
-        self.assertIn("part 1 of a three-part bedtime story", prompt)
-        self.assertIn("Scene description:", prompt)
-        self.assertIn("blue house with a red roof", prompt)
-        self.assertIn("whole story world", prompt)
-        self.assertIn("Begin in the exact same scene", prompt)
-        self.assertIn("specific described details actively", prompt)
-        self.assertIn("Do not add any new detail not explicit in the description", prompt)
-        self.assertIn("small gentle point of curiosity", prompt)
-        self.assertIn("Do not mention AI, prompts, instructions", prompt)
-        self.assertIn("Write about 50 words", prompt)
-        self.assertIn("Now write only part 1.", prompt)
+        self.assertTrue(prompt.endswith(DESCRIPTION_USER_PROMPT_SUFFIX))
 
-    def test_build_story_messages_for_part_2_uses_grounded_follow_up_turn(self):
+    def test_build_story_messages_for_part_1_preserves_description_turn(self):
         messages = build_story_messages(
-            description_text="A rabbit stands beside a pond.",
-            previous_parts=["The rabbit watched the still water shimmer under the moon."],
+            description_prompt="Describe the visible scene in one concise paragraph.",
+            description_text="A blue house stands beside two green trees and a blue car.",
+            previous_parts=[],
         )
-        self.assertEqual(messages[0]["content"], STORY_SYSTEM_PROMPT)
+
+        self.assertEqual(messages[0]["content"], MULTIMODAL_SYSTEM_PROMPT)
+        self.assertEqual(messages[1]["role"], "user")
         self.assertEqual(messages[2]["role"], "assistant")
-        self.assertEqual(messages[2]["content"], "The rabbit watched the still water shimmer under the moon.")
+        self.assertEqual(messages[2]["content"], "A blue house stands beside two green trees and a blue car.")
         self.assertEqual(messages[3]["role"], "user")
-        self.assertEqual(messages[3]["content"], PART_2_USER_PROMPT)
-        self.assertIn("Stay in the exact same scene", messages[3]["content"])
-        self.assertIn("details explicit in the description and part 1", messages[3]["content"])
-        self.assertIn("Do not add any new detail not explicit in the description", messages[3]["content"])
-        self.assertIn("Write about 50 words", messages[3]["content"])
+        self.assertEqual(messages[3]["content"], build_image_text_content(PART_1_USER_PROMPT))
 
-    def test_build_story_messages_for_part_3_uses_grounded_final_turn(self):
+    def test_build_story_messages_for_part_2_keeps_description_and_part_1(self):
         messages = build_story_messages(
+            description_prompt="Describe the visible scene in one concise paragraph.",
+            description_text="A rabbit stands beside a pond.",
+            previous_parts=["The rabbit watched the still pond shine softly."],
+        )
+
+        self.assertEqual(messages[4]["role"], "assistant")
+        self.assertEqual(messages[4]["content"], "The rabbit watched the still pond shine softly.")
+        self.assertEqual(messages[5]["role"], "user")
+        self.assertEqual(messages[5]["content"], build_image_text_content(PART_2_USER_PROMPT))
+
+    def test_build_story_messages_for_part_3_keeps_full_multimodal_history(self):
+        messages = build_story_messages(
+            description_prompt="Describe the visible scene in one concise paragraph.",
             description_text="A rabbit stands beside a pond.",
             previous_parts=[
-                "The rabbit watched the still water shimmer under the moon.",
-                "A silver fish surfaced once and left tiny rings drifting outward.",
+                "The rabbit watched the still pond shine softly.",
+                "A small ripple widened once and then grew still again.",
             ],
         )
-        self.assertEqual(messages[4]["role"], "assistant")
-        self.assertEqual(messages[4]["content"], "A silver fish surfaced once and left tiny rings drifting outward.")
-        self.assertEqual(messages[5]["role"], "user")
-        self.assertEqual(messages[5]["content"], PART_3_USER_PROMPT)
-        self.assertIn("Stay in the exact same scene", messages[5]["content"])
-        self.assertIn("details explicit in the description and earlier parts", messages[5]["content"])
-        self.assertIn("Do not add any new detail not explicit in the description", messages[5]["content"])
-        self.assertIn("End with a calm, hopeful, bedtime-safe feeling", messages[5]["content"])
-        self.assertIn("Write about 50 words", messages[5]["content"])
+
+        self.assertEqual(messages[6]["role"], "assistant")
+        self.assertEqual(messages[6]["content"], "A small ripple widened once and then grew still again.")
+        self.assertEqual(messages[7]["role"], "user")
+        self.assertEqual(messages[7]["content"], build_image_text_content(PART_3_USER_PROMPT))
+
+    def test_format_story_messages_serializes_image_turns(self):
+        formatted = format_story_messages(
+            [
+                {"role": "system", "content": MULTIMODAL_SYSTEM_PROMPT},
+                {"role": "user", "content": build_image_text_content(PART_1_USER_PROMPT)},
+                {"role": "assistant", "content": "A calm story part."},
+            ]
+        )
+
+        self.assertIn("SYSTEM:", formatted)
+        self.assertIn("[IMAGE]", formatted)
+        self.assertIn(PART_1_USER_PROMPT, formatted)
+        self.assertIn("ASSISTANT:", formatted)
+        self.assertIn("A calm story part.", formatted)
 
     def test_validate_description_text_rejects_empty_output(self):
         with self.assertRaises(ValidationError):
