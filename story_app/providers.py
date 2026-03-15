@@ -26,7 +26,7 @@ def _torch_dtype():
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-class SmolVLMImageDescriber:
+class VisionLanguageImageDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"

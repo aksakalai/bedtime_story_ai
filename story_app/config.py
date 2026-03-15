@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-v7-20260315"
+APP_BUILD = "phase1-v8-20260315"
 
 
 @dataclass(frozen=True)
 class ModelIds:
-    image_describer: str = "HuggingFaceTB/SmolVLM-500M-Instruct"
+    image_describer: str = "llava-hf/llava-onevision-qwen2-0.5b-ov-hf"
     story_writer: str = "Qwen/Qwen2.5-1.5B-Instruct"
 
 

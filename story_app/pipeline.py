@@ -15,7 +15,7 @@ from .prompts import (
     validate_description_text,
     validate_story_part_text,
 )
-from .providers import QwenStoryWriter, SmolVLMImageDescriber
+from .providers import QwenStoryWriter, VisionLanguageImageDescriber
 from .schemas import DescriptionResult, PipelineResult, StoryDraft, StoryStep
 
 ProgressCallback = Callable[[float, str], None]
@@ -37,7 +37,7 @@ class KidStoryPipeline:
     def __init__(
         self,
         config: GenerationConfig = DEFAULT_CONFIG,
-        describer_factory=SmolVLMImageDescriber,
+        describer_factory=VisionLanguageImageDescriber,
         writer_factory=QwenStoryWriter,
     ):
         self.config = config

@@ -18,5 +18,5 @@ python -m story_app
 
 ## Models
 
-- Description: `HuggingFaceTB/SmolVLM-500M-Instruct`
+- Description: `llava-hf/llava-onevision-qwen2-0.5b-ov-hf`
 - Story drafting: `Qwen/Qwen2.5-1.5B-Instruct`
