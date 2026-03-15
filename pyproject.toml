@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "bedtime-story-ai"
 version = "0.1.0"
-description = "Phase 1 debug workbench for drafting a three-part bedtime story from one drawing."
+description = "Resident storyboard workbench for drafting, illustrating, and narrating a three-part bedtime story from one drawing."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Codex" }]
@@ -14,8 +14,11 @@ dependencies = [
   "bitsandbytes>=0.43.3; platform_system != 'Darwin'",
   "diffusers>=0.32.2",
   "gradio>=5.5.0",
+  "kokoro>=0.9.2",
+  "numpy>=1.26.0",
   "Pillow>=10.4.0",
   "safetensors>=0.4.5",
+  "soundfile>=0.13.1",
   "torch>=2.4.0",
   "transformers>=4.50.0"
 ]

@@ -75,11 +75,12 @@ APP_CSS = """
 INTRO_HTML = f"""
 <div class="hero-card">
   <h1>Resident Storyboard Workbench</h1>
-  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, and three separate text-to-image storyboard illustrations.</p>
+  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, three separate text-to-image storyboard illustrations, and one narration track for each story part.</p>
   <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
   <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
   <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
   <p class="debug-copy"><strong>Part image model:</strong> {DEFAULT_CONFIG.models.part_image_generator}</p>
+  <p class="debug-copy"><strong>Narration model:</strong> {DEFAULT_CONFIG.models.part_narrator}</p>
 </div>
 """
 
@@ -123,10 +124,13 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         result.full_conversation_text,
         result.part_1_text,
         _load_image_for_ui(result.story_part_1_image_path),
+        result.story_part_1_audio_path,
         result.part_2_text,
         _load_image_for_ui(result.story_part_2_image_path),
+        result.story_part_2_audio_path,
         result.part_3_text,
         _load_image_for_ui(result.story_part_3_image_path),
+        result.story_part_3_audio_path,
         str(Path(result.run_dir).resolve()),
     )
 
@@ -183,6 +187,10 @@ def build_demo() -> gr.Blocks:
                         height=560,
                         elem_classes=["story-part-image"],
                     )
+                    part_1_audio_output = gr.Audio(
+                        label="Part 1 narration",
+                        interactive=False,
+                    )
                 with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 2", elem_classes=["debug-title"])
                     part_2_output = gr.Textbox(lines=7, interactive=False)
@@ -192,6 +200,10 @@ def build_demo() -> gr.Blocks:
                         height=560,
                         elem_classes=["story-part-image"],
                     )
+                    part_2_audio_output = gr.Audio(
+                        label="Part 2 narration",
+                        interactive=False,
+                    )
                 with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 3", elem_classes=["debug-title"])
                     part_3_output = gr.Textbox(lines=7, interactive=False)
@@ -200,6 +212,10 @@ def build_demo() -> gr.Blocks:
                         interactive=False,
                         height=560,
                         elem_classes=["story-part-image"],
+                    )
+                    part_3_audio_output = gr.Audio(
+                        label="Part 3 narration",
+                        interactive=False,
                     )
 
             create_button.click(
@@ -212,10 +228,13 @@ def build_demo() -> gr.Blocks:
                     full_conversation_output,
                     part_1_output,
                     part_1_image_output,
+                    part_1_audio_output,
                     part_2_output,
                     part_2_image_output,
+                    part_2_audio_output,
                     part_3_output,
                     part_3_image_output,
+                    part_3_audio_output,
                     run_dir_output,
                 ],
             )

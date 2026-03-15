@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 import gc
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -338,4 +339,83 @@ class SSD1BTextToImageGenerator:
             _clear_torch_memory()
             return
 
+        self.pipeline = None
+
+
+class KokoroNarrationEngine:
+    def __init__(self, config: GenerationConfig):
+        self.config = config
+        self.pipeline: Any | None = None
+
+    def _resolve_model_id(self) -> str:
+        return self.config.models.part_narrator
+
+    def _cache_key(self) -> tuple[str, str, str]:
+        return ("narration_engine", self._resolve_model_id(), self.config.narration_lang_code)
+
+    def _ensure_system_dependency(self) -> None:
+        if shutil.which("espeak-ng") is not None:
+            return
+        raise ValidationError(
+            "Kokoro narration requires espeak-ng. In Colab, run "
+            "`!apt-get -qq -y install espeak-ng` once, then restart the session and relaunch."
+        )
+
+    def _load(self) -> None:
+        if self.pipeline is not None:
+            return
+
+        self._ensure_system_dependency()
+        from kokoro import KPipeline
+
+        cache_key = self._cache_key()
+        cached = _get_model_cache().get(cache_key)
+        if cached is not None:
+            print(f"[narration] Reusing cached model: {self._resolve_model_id()}")
+            self.pipeline = cached["pipeline"]
+            return
+
+        print(f"[narration] Loading model: {self._resolve_model_id()}")
+        self.pipeline = KPipeline(lang_code=self.config.narration_lang_code)
+        _get_model_cache()[cache_key] = {"pipeline": self.pipeline}
+
+    def narrate(
+        self,
+        *,
+        text: str,
+        output_path: str | Path,
+    ) -> tuple[Path, float]:
+        self._load()
+        assert self.pipeline is not None
+
+        import numpy as np
+        import soundfile as sf
+
+        audio_chunks: list[Any] = []
+        for _, _, audio in self.pipeline(
+            text,
+            voice=self.config.narration_voice,
+            speed=self.config.narration_speed,
+        ):
+            if audio is None:
+                continue
+            audio_chunks.append(np.asarray(audio, dtype=np.float32).reshape(-1))
+
+        if not audio_chunks:
+            raise ValidationError("Narration model produced no audio.")
+
+        full_audio = np.concatenate(audio_chunks)
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        sf.write(output_path, full_audio, self.config.narration_sample_rate)
+        duration_seconds = float(len(full_audio) / self.config.narration_sample_rate)
+        print(
+            f"[narration] Saved audio to {output_path} "
+            f"(duration={duration_seconds:.2f}s)"
+        )
+        return output_path, duration_seconds
+
+    def unload(self, clear_cache: bool = False) -> None:
+        if clear_cache:
+            _get_model_cache().pop(self._cache_key(), None)
         self.pipeline = None

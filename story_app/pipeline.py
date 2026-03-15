@@ -16,7 +16,12 @@ from .prompts import (
     validate_description_text,
     validate_story_part_text,
 )
-from .providers import Qwen25VLMultimodalEngine, SSD1BTextToImageGenerator, clear_cached_models
+from .providers import (
+    KokoroNarrationEngine,
+    Qwen25VLMultimodalEngine,
+    SSD1BTextToImageGenerator,
+    clear_cached_models,
+)
 from .schemas import (
     DescriptionResult,
     PipelineResult,
@@ -48,14 +53,17 @@ class KidStoryPipeline:
         describer_factory=Qwen25VLMultimodalEngine,
         writer_factory=Qwen25VLMultimodalEngine,
         image_generator_factory=SSD1BTextToImageGenerator,
+        narrator_factory=KokoroNarrationEngine,
     ):
         self.config = config
         self.describer_factory = describer_factory
         self.writer_factory = writer_factory
         self.image_generator_factory = image_generator_factory
+        self.narrator_factory = narrator_factory
         self._describer = None
         self._writer = None
         self._image_generator = None
+        self._narrator = None
 
     def _notify(self, progress_callback: ProgressCallback | None, value: float, message: str) -> None:
         if progress_callback is not None:
@@ -80,15 +88,22 @@ class KidStoryPipeline:
             self._image_generator = self.image_generator_factory(self.config)
         return self._image_generator
 
+    def _get_narrator(self):
+        if self._narrator is None:
+            self._narrator = self.narrator_factory(self.config)
+        return self._narrator
+
     def preload_models(self) -> None:
         self._get_describer()._load()
         self._get_writer()._load()
         self._get_image_generator()._load()
+        self._get_narrator()._load()
 
     def clear_loaded_models(self) -> None:
         describer = self._describer
         writer = self._writer
         image_generator = self._image_generator
+        narrator = self._narrator
         if describer is not None:
             try:
                 describer.unload(clear_cache=True)
@@ -104,9 +119,15 @@ class KidStoryPipeline:
                 image_generator.unload(clear_cache=True)
             except TypeError:
                 image_generator.unload()
+        if narrator is not None:
+            try:
+                narrator.unload(clear_cache=True)
+            except TypeError:
+                narrator.unload()
         self._describer = None
         self._writer = None
         self._image_generator = None
+        self._narrator = None
         clear_cached_models()
 
     def _create_story_draft_internal(
@@ -216,6 +237,7 @@ class KidStoryPipeline:
             progress_callback=progress_callback,
         )
         image_generator = self._get_image_generator()
+        narrator = self._get_narrator()
         self._notify(progress_callback, 0.9, "Generating storyboard images")
         story_parts = [
             draft_result.part_1_text,
@@ -232,10 +254,16 @@ class KidStoryPipeline:
             run_paths.story_part_2_image_path,
             run_paths.story_part_3_image_path,
         ]
+        audio_paths = [
+            run_paths.story_part_1_audio_path,
+            run_paths.story_part_2_audio_path,
+            run_paths.story_part_3_audio_path,
+        ]
         generated_prompt_paths: list[str] = []
         generated_image_paths: list[str] = []
         manifest_parts: list[StoryboardManifestPart] = []
-        progress_points = [0.92, 0.96, 1.0]
+        generated_audio_paths: list[str] = []
+        progress_points = [0.92, 0.95, 0.98]
 
         for index, part_text in enumerate(story_parts, start=1):
             prompt_text = build_story_part_image_prompt(
@@ -271,6 +299,30 @@ class KidStoryPipeline:
                 f"Generated image for part {index}",
             )
 
+        self._notify(progress_callback, 0.985, "Generating narration")
+        narration_progress_points = [0.99, 0.995, 1.0]
+        for index, part_text in enumerate(story_parts, start=1):
+            audio_output_path, duration_seconds = narrator.narrate(
+                text=part_text,
+                output_path=audio_paths[index - 1],
+            )
+            resolved_audio_path = str(audio_output_path.resolve())
+            generated_audio_paths.append(resolved_audio_path)
+            manifest_parts[index - 1] = StoryboardManifestPart(
+                index=manifest_parts[index - 1].index,
+                text=manifest_parts[index - 1].text,
+                image_prompt=manifest_parts[index - 1].image_prompt,
+                seed=manifest_parts[index - 1].seed,
+                image_path=manifest_parts[index - 1].image_path,
+                audio_path=resolved_audio_path,
+                audio_duration_seconds=duration_seconds,
+            )
+            self._notify(
+                progress_callback,
+                narration_progress_points[index - 1],
+                f"Generated narration for part {index}",
+            )
+
         manifest = StoryboardManifest(
             run_id=draft_result.run_id,
             input_image_path=draft_result.input_image_path,
@@ -288,5 +340,8 @@ class KidStoryPipeline:
             story_part_1_image_path=generated_image_paths[0],
             story_part_2_image_path=generated_image_paths[1],
             story_part_3_image_path=generated_image_paths[2],
+            story_part_1_audio_path=generated_audio_paths[0],
+            story_part_2_audio_path=generated_audio_paths[1],
+            story_part_3_audio_path=generated_audio_paths[2],
             storyboard_manifest_path=str(run_paths.storyboard_manifest_path.resolve()),
         )

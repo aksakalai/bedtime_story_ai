@@ -6,6 +6,7 @@ Resident storyboard workbench for turning one uploaded drawing into:
 - one full story-writing conversation
 - three extracted story parts
 - three generated storyboard images
+- three generated narration tracks
 
 ## Current Scope
 
@@ -13,7 +14,7 @@ This repository is intentionally a Phase 2A baseline, not the full end-state pro
 
 Current implemented flow:
 
-`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part text-to-image generation -> artifact files under outputs/run_* -> Gradio debug UI`
+`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part text-to-image generation -> per-part narration generation -> artifact files under outputs/run_* -> Gradio debug UI`
 
 Current architecture:
 
@@ -29,6 +30,7 @@ Stable interfaces for the Colab workflow:
 - `story_app.app.generate_story(...)`
 - `story_app.app.build_demo()`
 - `KidStoryPipeline.create_story_draft(...)`
+- `KidStoryPipeline.create_story_package(...)`
 
 Stable artifact contract per run:
 
@@ -45,13 +47,15 @@ Stable artifact contract per run:
 - `story_part_1_image.png`
 - `story_part_2_image.png`
 - `story_part_3_image.png`
+- `story_part_1_audio.wav`
+- `story_part_2_audio.wav`
+- `story_part_3_audio.wav`
 - `storyboard_manifest.json`
 
 ## Not Yet Implemented
 
 The following stages are intentionally out of scope for this baseline:
 
-- narration or TTS
 - word-level timing and highlighting
 - video assembly or export
 
@@ -60,6 +64,12 @@ The following stages are intentionally out of scope for this baseline:
 ```bash
 pip install -e .
 python -m story_app
+```
+
+For Kokoro narration in Colab, install the system phonemizer dependency once per fresh runtime:
+
+```bash
+apt-get -qq -y install espeak-ng
 ```
 
 ## Colab Entry Surface
@@ -74,6 +84,7 @@ print("APP_BUILD:", story_app.config.APP_BUILD)
 print("Description model:", story_app.config.DEFAULT_CONFIG.models.image_describer)
 print("Story model:", story_app.config.DEFAULT_CONFIG.models.story_writer)
 print("Part image model:", story_app.config.DEFAULT_CONFIG.models.part_image_generator)
+print("Narration model:", story_app.config.DEFAULT_CONFIG.models.part_narrator)
 
 demo = story_app.app.build_demo()
 demo.launch(debug=True, share=True, inline=True)
@@ -84,3 +95,4 @@ demo.launch(debug=True, share=True, inline=True)
 - Description: `Qwen/Qwen2.5-VL-3B-Instruct`
 - Story drafting: `Qwen/Qwen2.5-VL-3B-Instruct`
 - Storyboard images: `segmind/SSD-1B`
+- Narration: `hexgrad/Kokoro-82M`

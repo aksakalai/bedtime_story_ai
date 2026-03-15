@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-text-to-image-v12-20260316"
+APP_BUILD = "phase2-storyboard-narration-v13-20260316"
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,7 @@ class ModelIds:
     image_describer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
     story_writer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
     part_image_generator: str = "segmind/SSD-1B"
+    part_narrator: str = "hexgrad/Kokoro-82M"
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,10 @@ class GenerationConfig:
         "cropped face, text, letters, watermark, logo, signature, frame, border, collage, split panel"
     )
     image_seed_stride: int = 1000
+    narration_lang_code: str = "a"
+    narration_voice: str = "af_heart"
+    narration_speed: float = 1.0
+    narration_sample_rate: int = 24000
     min_description_words: int = 10
     min_story_part_words: int = 1
     random_seed: int = 42

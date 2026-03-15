@@ -41,6 +41,9 @@ class RunPaths:
     story_part_1_image_path: Path
     story_part_2_image_path: Path
     story_part_3_image_path: Path
+    story_part_1_audio_path: Path
+    story_part_2_audio_path: Path
+    story_part_3_audio_path: Path
     storyboard_manifest_path: Path
 
 
@@ -61,6 +64,9 @@ class PipelineResult:
     story_part_1_image_path: str | None = None
     story_part_2_image_path: str | None = None
     story_part_3_image_path: str | None = None
+    story_part_1_audio_path: str | None = None
+    story_part_2_audio_path: str | None = None
+    story_part_3_audio_path: str | None = None
     storyboard_manifest_path: str | None = None
 
 
@@ -71,6 +77,8 @@ class StoryboardManifestPart:
     image_prompt: str
     seed: int
     image_path: str
+    audio_path: str | None = None
+    audio_duration_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +100,8 @@ class StoryboardManifest:
                     "image_prompt": part.image_prompt,
                     "seed": part.seed,
                     "image_path": part.image_path,
+                    "audio_path": part.audio_path,
+                    "audio_duration_seconds": part.audio_duration_seconds,
                 }
                 for part in self.parts
             ],
