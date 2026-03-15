@@ -42,21 +42,23 @@ class AppTests(unittest.TestCase):
                         description_text="A calm house beside two trees and a little car.",
                     ),
                     steps=[
-                        StoryStep("part_1", "Prompt 1", "Part 1 text with enough words to look like a real story opening in the debug UI."),
-                        StoryStep("part_2", "Prompt 2", "Part 2 text with enough words to look like a real story middle in the debug UI."),
-                        StoryStep("part_3", "Prompt 3", "Part 3 text with enough words to look like a real story ending in the debug UI."),
+                        StoryStep("part_1", "Input Slice 1", "Part 1 text with enough words to look like a real story opening in the debug UI."),
+                        StoryStep("part_2", "Input Slice 2", "Part 2 text with enough words to look like a real story middle in the debug UI."),
+                        StoryStep("part_3", "Input Slice 3", "Part 3 text with enough words to look like a real story ending in the debug UI."),
                     ],
+                    full_conversation_text="SYSTEM:\nStory system\n\nUSER:\nPart 1 input\n\nASSISTANT:\nPart 1 output",
                 ),
             )
             with patch.object(app_module, "_PIPELINE", FakePipeline(result)):
                 outputs = app_module.generate_story(str(image_path))
 
-            self.assertEqual(len(outputs), 10)
+            self.assertEqual(len(outputs), 11)
             self.assertEqual(outputs[1], str(image_path))
             self.assertIn("A calm house", outputs[2])
-            self.assertEqual(outputs[3], "Prompt 1")
-            self.assertEqual(outputs[5], "Prompt 2")
-            self.assertEqual(outputs[7], "Prompt 3")
+            self.assertIn("SYSTEM:", outputs[3])
+            self.assertEqual(outputs[4], "Input Slice 1")
+            self.assertEqual(outputs[6], "Input Slice 2")
+            self.assertEqual(outputs[8], "Input Slice 3")
 
 
 if __name__ == "__main__":

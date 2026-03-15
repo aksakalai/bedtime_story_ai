@@ -128,6 +128,10 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(result.part_1_text, VALID_PART_1)
             self.assertEqual(result.part_2_text, VALID_PART_2)
             self.assertEqual(result.part_3_text, VALID_PART_3)
+            self.assertIn("SYSTEM:", result.draft.full_conversation_text)
+            self.assertIn(VALID_PART_1, result.draft.full_conversation_text)
+            self.assertIn(VALID_PART_2, result.draft.full_conversation_text)
+            self.assertIn(VALID_PART_3, result.draft.full_conversation_text)
 
             expected_files = [
                 "description_prompt.txt",

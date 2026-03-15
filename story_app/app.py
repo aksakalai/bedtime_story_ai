@@ -98,6 +98,7 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         status,
         result.input_image_path,
         result.description_text,
+        result.draft.full_conversation_text,
         steps[0].prompt_text,
         steps[0].output_text,
         steps[1].prompt_text,
@@ -134,20 +135,25 @@ def build_demo() -> gr.Blocks:
                     lines=4,
                     interactive=False,
                 )
+                full_conversation_output = gr.Textbox(
+                    label="Full story conversation",
+                    lines=18,
+                    interactive=False,
+                )
 
             with gr.Row():
                 with gr.Column(elem_classes=["surface-card"]):
-                    gr.Markdown("### Part 1 Prompt", elem_classes=["debug-title"])
+                    gr.Markdown("### Part 1 Input Slice", elem_classes=["debug-title"])
                     part_1_prompt = gr.Textbox(lines=12, interactive=False)
                     gr.Markdown("### Part 1 Output", elem_classes=["debug-title"])
                     part_1_output = gr.Textbox(lines=6, interactive=False)
                 with gr.Column(elem_classes=["surface-card"]):
-                    gr.Markdown("### Part 2 Prompt", elem_classes=["debug-title"])
+                    gr.Markdown("### Part 2 Input Slice", elem_classes=["debug-title"])
                     part_2_prompt = gr.Textbox(lines=12, interactive=False)
                     gr.Markdown("### Part 2 Output", elem_classes=["debug-title"])
                     part_2_output = gr.Textbox(lines=6, interactive=False)
                 with gr.Column(elem_classes=["surface-card"]):
-                    gr.Markdown("### Part 3 Prompt", elem_classes=["debug-title"])
+                    gr.Markdown("### Part 3 Input Slice", elem_classes=["debug-title"])
                     part_3_prompt = gr.Textbox(lines=12, interactive=False)
                     gr.Markdown("### Part 3 Output", elem_classes=["debug-title"])
                     part_3_output = gr.Textbox(lines=6, interactive=False)
@@ -159,6 +165,7 @@ def build_demo() -> gr.Blocks:
                     status_output,
                     preview_image,
                     description_output,
+                    full_conversation_output,
                     part_1_prompt,
                     part_1_output,
                     part_2_prompt,

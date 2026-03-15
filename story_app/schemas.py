@@ -26,6 +26,7 @@ class StoryStep:
 class StoryDraft:
     description: DescriptionResult
     steps: list[StoryStep]
+    full_conversation_text: str
 
 
 @dataclass(frozen=True)

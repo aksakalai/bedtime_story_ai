@@ -10,6 +10,7 @@ from .prompts import (
     build_description_prompt,
     build_story_messages,
     build_story_part_prompt,
+    format_story_messages,
     normalize_text,
     validate_description_text,
     validate_story_part_text,
@@ -106,6 +107,8 @@ class KidStoryPipeline:
                     step_name=step_name,
                     previous_parts=previous_parts,
                 )
+                conversation_slice_text = format_story_messages(messages)
+                write_text(prompt_path, conversation_slice_text)
                 raw_output = writer.generate_part(messages)
                 output_text = validate_story_part_text(raw_output, self.config)
                 output_text = normalize_text(output_text)
@@ -121,7 +124,7 @@ class KidStoryPipeline:
                 steps.append(
                     StoryStep(
                         step_name=step_name,
-                        prompt_text=prompt_text,
+                        prompt_text=conversation_slice_text,
                         output_text=output_text,
                     )
                 )
@@ -129,7 +132,20 @@ class KidStoryPipeline:
         finally:
             writer.unload()
 
-        draft = StoryDraft(description=description, steps=steps)
+        final_messages = build_story_messages(
+            description_text=description_text,
+            step_name="part_3",
+            previous_parts=[step.output_text for step in steps[:2]],
+        )
+        full_conversation_messages = [
+            *final_messages,
+            {"role": "assistant", "content": steps[2].output_text},
+        ]
+        draft = StoryDraft(
+            description=description,
+            steps=steps,
+            full_conversation_text=format_story_messages(full_conversation_messages),
+        )
         result = PipelineResult(
             run_id=run_paths.run_id,
             run_dir=run_paths.run_dir.resolve(),

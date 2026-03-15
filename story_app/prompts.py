@@ -151,6 +151,17 @@ def build_story_messages(
     return messages
 
 
+def format_story_messages(messages: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for message in messages:
+        role = str(message.get("role", "unknown")).upper()
+        content = str(message.get("content", "")).strip()
+        lines.append(f"{role}:")
+        lines.append(content)
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 def validate_description_text(raw_text: str, config: GenerationConfig) -> str:
     text = normalize_text(raw_text)
     if len(text.split()) < config.min_description_words:
