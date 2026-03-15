@@ -7,11 +7,10 @@ from .config import GenerationConfig
 from .schemas import ValidationError
 
 STORY_SYSTEM_PROMPT = (
-    "You write only concise, gentle bedtime-story prose. The scene description is the entire story world. Use only "
-    "the characters, animals, objects, colors, and scenery explicitly stated in that description. Do not add any new "
-    "character, creature, object, scenery detail, location, off-screen space, backstory, or time jump. Add only "
-    "small actions and feelings that directly involve the described elements. Reply only with the story text. Do not "
-    "include explanations, labels, or meta commentary."
+    "You write concise, gentle bedtime-story prose. The scene description is the whole story world. Use only details "
+    "explicit in that description. Add only small actions and feelings tied to those details. Do not add new "
+    "characters, creatures, objects, places, off-screen space, backstory, or time jumps. Reply only with the story "
+    "text."
 )
 
 PART_2_USER_PROMPT = (
@@ -19,10 +18,10 @@ PART_2_USER_PROMPT = (
     "Requirements:\n"
     "- Continue directly from part 1.\n"
     "- Stay in the exact same scene.\n"
-    "- Build one small gentle development using only details explicitly present in the description and part 1.\n"
-    "- Do not add any new detail that is not explicit in the description.\n"
-    "- Keep the tone calm, clear, and bedtime-safe.\n"
-    "- Aim for roughly 35 to 55 words.\n"
+    "- Build one small gentle development using only details explicit in the description and part 1.\n"
+    "- Do not add any new detail not explicit in the description.\n"
+    "- Keep it calm and bedtime-safe.\n"
+    "- Write about 50 words.\n"
     "- Write only the story text."
 )
 
@@ -31,10 +30,10 @@ PART_3_USER_PROMPT = (
     "Requirements:\n"
     "- Continue directly from part 2.\n"
     "- Stay in the exact same scene.\n"
-    "- Resolve the gentle development using only details explicitly present in the description and earlier parts.\n"
-    "- Do not add any new detail that is not explicit in the description.\n"
+    "- Resolve the gentle development using only details explicit in the description and earlier parts.\n"
+    "- Do not add any new detail not explicit in the description.\n"
     "- End with a calm, hopeful, bedtime-safe feeling.\n"
-    "- Aim for roughly 35 to 55 words.\n"
+    "- Write about 50 words.\n"
     "- Write only the story text."
 )
 
@@ -55,15 +54,15 @@ def build_story_part_1_prompt(description_text: str) -> str:
         "Write only part 1 of a three-part bedtime story based on the scene description below.\n\n"
         f"Scene description:\n{description_text}\n\n"
         "Requirements:\n"
-        "- Treat the scene description as the entire story world.\n"
+        "- Treat the scene description as the whole story world.\n"
         "- Begin in the exact same scene.\n"
         "- Use the specific described details actively in the story prose.\n"
         "- Let part 1 feel like the opening moment of a story, not a summary.\n"
-        "- Do not add any new detail that is not explicit in the description.\n"
+        "- Do not add any new detail not explicit in the description.\n"
         "- Add only small actions or feelings that directly involve the described elements.\n"
         "- End with one small gentle point of curiosity that can continue into part 2.\n"
-        "- Keep the tone warm, calm, and bedtime-safe.\n"
-        "- Aim for roughly 35 to 55 words.\n"
+        "- Keep it warm and bedtime-safe.\n"
+        "- Write about 50 words.\n"
         "- Reply only with the story itself.\n"
         "- Do not mention AI, prompts, instructions, or the source of the scene description.\n"
         "\nNow write only part 1."

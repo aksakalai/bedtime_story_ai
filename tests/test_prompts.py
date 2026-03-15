@@ -17,11 +17,11 @@ from story_app.schemas import ValidationError
 class PromptTests(unittest.TestCase):
     def test_build_description_prompt_targets_concise_visible_scene_facts(self):
         prompt = build_description_prompt(DEFAULT_CONFIG)
-        self.assertIn("Describe the visible scene in one concise, factual paragraph", prompt)
-        self.assertIn("Include only directly visible, uniquely identifiable details", prompt)
-        self.assertIn("Prefer exact visible facts over atmosphere or summary", prompt)
-        self.assertIn("Do not mention the image itself, the medium, the artist, style", prompt)
-        self.assertIn("If a detail is not clearly visible, leave it out", prompt)
+        self.assertIn("Describe only the visible scene in one concise paragraph", prompt)
+        self.assertIn("Include uniquely identifiable objects", prompt)
+        self.assertIn("Use only directly visible facts", prompt)
+        self.assertIn("Do not mention the image, medium, artist, style", prompt)
+        self.assertIn("Leave out anything not clearly visible", prompt)
 
     def test_build_story_part_1_prompt_uses_scene_as_only_source_of_facts(self):
         prompt = build_story_part_1_prompt(
@@ -30,12 +30,13 @@ class PromptTests(unittest.TestCase):
         self.assertIn("part 1 of a three-part bedtime story", prompt)
         self.assertIn("Scene description:", prompt)
         self.assertIn("blue house with a red roof", prompt)
-        self.assertIn("entire story world", prompt)
+        self.assertIn("whole story world", prompt)
         self.assertIn("Begin in the exact same scene", prompt)
         self.assertIn("specific described details actively", prompt)
-        self.assertIn("Do not add any new detail that is not explicit in the description", prompt)
+        self.assertIn("Do not add any new detail not explicit in the description", prompt)
         self.assertIn("small gentle point of curiosity", prompt)
         self.assertIn("Do not mention AI, prompts, instructions", prompt)
+        self.assertIn("Write about 50 words", prompt)
         self.assertIn("Now write only part 1.", prompt)
 
     def test_build_story_messages_for_part_2_uses_grounded_follow_up_turn(self):
@@ -49,9 +50,9 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[3]["role"], "user")
         self.assertEqual(messages[3]["content"], PART_2_USER_PROMPT)
         self.assertIn("Stay in the exact same scene", messages[3]["content"])
-        self.assertIn("only details explicitly present", messages[3]["content"])
-        self.assertIn("Do not add any new detail", messages[3]["content"])
-        self.assertIn("35 to 55 words", messages[3]["content"])
+        self.assertIn("details explicit in the description and part 1", messages[3]["content"])
+        self.assertIn("Do not add any new detail not explicit in the description", messages[3]["content"])
+        self.assertIn("Write about 50 words", messages[3]["content"])
 
     def test_build_story_messages_for_part_3_uses_grounded_final_turn(self):
         messages = build_story_messages(
@@ -66,10 +67,10 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[5]["role"], "user")
         self.assertEqual(messages[5]["content"], PART_3_USER_PROMPT)
         self.assertIn("Stay in the exact same scene", messages[5]["content"])
-        self.assertIn("details explicitly present", messages[5]["content"])
-        self.assertIn("Do not add any new detail", messages[5]["content"])
+        self.assertIn("details explicit in the description and earlier parts", messages[5]["content"])
+        self.assertIn("Do not add any new detail not explicit in the description", messages[5]["content"])
         self.assertIn("End with a calm, hopeful, bedtime-safe feeling", messages[5]["content"])
-        self.assertIn("35 to 55 words", messages[5]["content"])
+        self.assertIn("Write about 50 words", messages[5]["content"])
 
     def test_validate_description_text_rejects_empty_output(self):
         with self.assertRaises(ValidationError):
