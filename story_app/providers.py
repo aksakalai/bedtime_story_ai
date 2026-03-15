@@ -37,6 +37,7 @@ def _preview_text(raw_text: str, limit: int = 600) -> str:
     text = re.sub(r"\s+", " ", raw_text).strip()
     return text[:limit] + ("..." if len(text) > limit else "")
 
+
 class FlorenceDrawingDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
@@ -52,6 +53,7 @@ class FlorenceDrawingDescriber:
         from transformers import AutoProcessor, Florence2ForConditionalGeneration
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"[describe] Loading model: {self.config.models.drawing_describer} on {self.device}")
         self.processor = AutoProcessor.from_pretrained(
             self.config.models.drawing_describer,
             trust_remote_code=False,
@@ -88,7 +90,7 @@ class FlorenceDrawingDescriber:
                 pixel_values=pixel_values,
                 attention_mask=attention_mask,
                 max_new_tokens=max_new_tokens,
-                num_beams=1,
+                num_beams=3,
                 do_sample=False,
             )
 
@@ -114,6 +116,8 @@ class FlorenceDrawingDescriber:
         prompt = build_description_prompt(self.config)
         if prompt_path is not None:
             write_text(prompt_path, prompt)
+            print(f"[describe] Prompt saved: {prompt_path}")
+        print(f"[describe] Prompt task: {prompt}")
 
         raw_text = self._generate_text(
             image_path,
@@ -122,9 +126,12 @@ class FlorenceDrawingDescriber:
         )
         if response_path is not None:
             write_text(response_path, raw_text)
+            print(f"[describe] Response saved: {response_path}")
 
         print(f"[describe] Raw preview: {_preview_text(raw_text)}")
-        return parse_description_response(raw_text, self.config)
+        description = parse_description_response(raw_text, self.config)
+        print(f"[describe] Parsed description word count: {len(description.text.split())}")
+        return description
 
     def unload(self) -> None:
         self.model = None
@@ -160,8 +167,9 @@ class QwenStoryWriter:
             except Exception:
                 model_kwargs["torch_dtype"] = torch.float16
         else:
-            model_kwargs["torch_dtype"] = torch.float32
+                model_kwargs["torch_dtype"] = torch.float32
 
+        print(f"[story] Loading model: {self.config.models.story_writer}")
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.models.story_writer)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -187,6 +195,9 @@ class QwenStoryWriter:
         prompt = build_story_prompt(description, self.config)
         if prompt_path is not None:
             write_text(prompt_path, prompt)
+            print(f"[story] Prompt saved: {prompt_path}")
+        print(f"[story] Prompt separator token: {self.config.story_separator_token}")
+        print(f"[story] Drawing description preview: {_preview_text(description.text, limit=240)}")
 
         messages = [
             {
@@ -219,9 +230,13 @@ class QwenStoryWriter:
         raw_text = self.tokenizer.decode(output_ids[0][prompt_length:], skip_special_tokens=True)
         if response_path is not None:
             write_text(response_path, raw_text)
+            print(f"[story] Response saved: {response_path}")
 
         print(f"[story] Raw preview: {_preview_text(raw_text)}")
+        print(f"[story] Raw separator count: {raw_text.count(self.config.story_separator_token)}")
         story = parse_story_response(raw_text, self.config)
+        print(f"[story] Parsed title: {story.title}")
+        print(f"[story] Parsed part word counts: {[len(part.story_text.split()) for part in story.parts]}")
         return enrich_story_with_image_prompts(story, description, self.config)
 
     def unload(self) -> None:
@@ -285,8 +300,10 @@ class SSD1BSceneGenerator:
                 guidance_scale=self.config.guidance_scale,
                 generator=generator,
             )
+            print(f"[images] Scene {index} prompt preview: {_preview_text(part.image_prompt, limit=240)}")
             image_path = images_dir / f"scene_{index}.png"
             result.images[0].save(image_path)
+            print(f"[images] Scene {index} saved: {image_path}")
             updated_parts.append(
                 StoryPart(
                     scene_goal=part.scene_goal,
@@ -332,6 +349,7 @@ class KokoroNarrator:
         updated_parts: list[StoryPart] = []
 
         for index, part in enumerate(story.parts, start=1):
+            print(f"[narration] Part {index} text word count: {len(part.story_text.split())}")
             generator = self.pipeline(
                 part.story_text,
                 voice=self.config.narrator_voice,
@@ -346,6 +364,7 @@ class KokoroNarrator:
             audio_path = audio_dir / f"part_{index}.wav"
             sf.write(audio_path, audio, sample_rate)
             duration_sec = len(audio) / sample_rate
+            print(f"[narration] Part {index} saved: {audio_path} ({duration_sec:.2f}s)")
             updated_parts.append(
                 StoryPart(
                     scene_goal=part.scene_goal,
@@ -360,4 +379,5 @@ class KokoroNarrator:
 
         merged_audio = np.concatenate(merged_segments).astype("float32")
         sf.write(merged_audio_path, merged_audio, sample_rate)
+        print(f"[narration] Merged audio saved: {merged_audio_path}")
         return StoryPackage(title=story.title, age_range=story.age_range, parts=updated_parts)

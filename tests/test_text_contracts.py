@@ -36,6 +36,21 @@ class TextContractTests(unittest.TestCase):
         self.assertEqual([part.scene_goal for part in story.parts], ["entrance", "buildup", "ending"])
         self.assertEqual(story.title, "Rabbit and the Quiet Pond")
 
+    def test_parse_story_response_accepts_title_and_parts_on_same_line(self):
+        raw_text = "\n".join(
+            [
+                "TITLE: Rabbit and the Quiet Pond PARTS:",
+                "The rabbit wandered to the pond and listened to the night settle softly around the water while a calm adventure began there.",
+                DEFAULT_CONFIG.story_separator_token,
+                "The moon reflected in the pond while the rabbit noticed gentle ripples, friendly reeds, and the quiet hush of bedtime all around.",
+                DEFAULT_CONFIG.story_separator_token,
+                "The rabbit curled beside the pond, watched the silver light fade into sleep, and rested in a calm dreamy hush until morning.",
+            ]
+        )
+
+        story = parse_story_response(raw_text, DEFAULT_CONFIG)
+        self.assertEqual(story.title, "Rabbit and the Quiet Pond")
+
     def test_parse_story_response_rejects_missing_parts_header(self):
         raw_text = "\n".join(
             [

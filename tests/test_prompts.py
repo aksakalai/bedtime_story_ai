@@ -27,7 +27,7 @@ class PromptTests(unittest.TestCase):
 
     def test_build_description_prompt_uses_line_contract(self):
         prompt = build_description_prompt(DEFAULT_CONFIG)
-        self.assertEqual(prompt, "<MORE_DETAILED_CAPTION>")
+        self.assertEqual(prompt, "<DETAILED_CAPTION>")
         self.assertNotIn("Previous output was invalid", prompt)
 
     def test_build_story_prompt_includes_line_contract_and_safety_rules(self):

@@ -24,7 +24,7 @@ def _word_count(text: str) -> int:
 
 
 def build_description_prompt(_config: GenerationConfig) -> str:
-    return "<MORE_DETAILED_CAPTION>"
+    return "<DETAILED_CAPTION>"
 
 
 def build_story_prompt(description: DrawingDescription, config: GenerationConfig) -> str:
@@ -74,21 +74,13 @@ def parse_story_response(raw_text: str, config: GenerationConfig) -> StoryPackag
     if not stripped:
         raise SchemaError("Story response was empty.")
 
-    lines = stripped.splitlines()
-    if len(lines) < 4:
-        raise SchemaError("Story response must include a title and three parts.")
-
-    title_line = lines[0].strip()
-    if not title_line.startswith("TITLE:"):
-        raise SchemaError("Story response must start with 'TITLE:'.")
-    title = title_line[len("TITLE:"):].strip()
+    match = re.match(r"^\s*TITLE:\s*(.*?)\s*PARTS:\s*", stripped, flags=re.DOTALL)
+    if not match:
+        raise SchemaError("Story response must start with 'TITLE:' and include 'PARTS:'.")
+    title = match.group(1).strip()
     if not title:
         raise SchemaError("Story title must not be empty.")
-
-    if lines[1].strip() != "PARTS:":
-        raise SchemaError("Story response must include a 'PARTS:' line after the title.")
-
-    body = "\n".join(lines[2:]).strip()
+    body = stripped[match.end():].strip()
     separator_count = body.count(config.story_separator_token)
     if separator_count != 2:
         raise SchemaError(

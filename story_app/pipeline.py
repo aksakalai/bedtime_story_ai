@@ -106,6 +106,9 @@ class KidStoryPipeline:
         run_paths = prepare_run_paths(image_path, self.config.outputs_root)
         _seed_everything(self.config.random_seed)
         print(f"[pipeline] Run directory: {run_paths.run_dir}")
+        print(f"[pipeline] Seed: {self.config.random_seed}")
+        print(f"[pipeline] Description prompt path: {run_paths.description_prompt_path}")
+        print(f"[pipeline] Story prompt path: {run_paths.story_prompt_path}")
 
         describer = FlorenceDrawingDescriber(self.config)
         try:
@@ -118,6 +121,7 @@ class KidStoryPipeline:
             self._validate_description(description)
             write_json(run_paths.description_path, description.to_dict())
             print(f"[pipeline] Drawing description saved: {run_paths.description_path}")
+            print(f"[pipeline] Drawing description preview: {description.text[:240]}")
         except Exception as exc:
             raise self._fail_stage(
                 "Drawing description",
@@ -138,6 +142,7 @@ class KidStoryPipeline:
             self._validate_story(story, require_image_prompts=True)
             self._save_story(run_paths, story)
             print(f"[pipeline] Story saved with {len(story.parts)} parts: {run_paths.story_path}")
+            print(f"[pipeline] Story title: {story.title}")
         except Exception as exc:
             raise self._fail_stage(
                 "Story generation",
