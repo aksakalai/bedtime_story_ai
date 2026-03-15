@@ -50,34 +50,115 @@ def count_image_placeholders(messages: list[dict[str, Any]]) -> int:
     return count
 
 
-def _build_model_kwargs() -> dict[str, Any]:
+def _resolve_model_family(model_id: str) -> str:
+    normalized = model_id.lower()
+    if "gemma-3" in normalized:
+        return "gemma3"
+    if "qwen2.5-vl" in normalized:
+        return "qwen25vl"
+    raise ValidationError(
+        f"Unsupported multimodal model family for '{model_id}'. Add a provider implementation before using it."
+    )
+
+
+def _build_quantized_model_kwargs() -> dict[str, Any]:
     import torch
 
-    model_kwargs: dict[str, Any] = {}
-    if torch.cuda.is_available():
-        model_kwargs["device_map"] = "auto"
-        try:
-            from transformers import BitsAndBytesConfig
+    if not torch.cuda.is_available():
+        return {"torch_dtype": torch.float32}
 
-            model_kwargs["quantization_config"] = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_compute_dtype=torch.float16,
-            )
-        except Exception:
-            model_kwargs["torch_dtype"] = torch.float16
-    else:
-        model_kwargs["torch_dtype"] = torch.float32
+    model_kwargs: dict[str, Any] = {"device_map": "auto"}
+    try:
+        from transformers import BitsAndBytesConfig
+
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+    except Exception:
+        model_kwargs["torch_dtype"] = torch.float16
     return model_kwargs
 
 
-class Qwen25VLMultimodalEngine:
+def _build_fallback_model_kwargs() -> dict[str, Any]:
+    import torch
+
+    if torch.cuda.is_available():
+        return {
+            "device_map": "auto",
+            "torch_dtype": torch.float16,
+        }
+    return {"torch_dtype": torch.float32}
+
+
+def _load_model_for_family(model_id: str, family: str) -> tuple[Any, Any]:
+    from transformers import AutoProcessor
+
+    processor = AutoProcessor.from_pretrained(model_id, padding_side="left")
+    quantized_kwargs = _build_quantized_model_kwargs()
+    fallback_kwargs = _build_fallback_model_kwargs()
+
+    if family == "gemma3":
+        from transformers import Gemma3ForConditionalGeneration
+
+        try:
+            model = Gemma3ForConditionalGeneration.from_pretrained(
+                model_id,
+                **quantized_kwargs,
+            )
+        except Exception:
+            model = Gemma3ForConditionalGeneration.from_pretrained(
+                model_id,
+                **fallback_kwargs,
+            )
+        return processor, model
+
+    if family == "qwen25vl":
+        from transformers import Qwen2_5_VLForConditionalGeneration
+
+        try:
+            model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_id,
+                **quantized_kwargs,
+            )
+        except Exception:
+            model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_id,
+                **fallback_kwargs,
+            )
+        return processor, model
+
+    raise ValidationError(f"Unsupported multimodal model family: {family}")
+
+
+def _normalize_message_content(content: Any, image: Image.Image | None) -> Any:
+    if isinstance(content, list):
+        normalized_items: list[dict[str, Any]] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            if item_type == "image":
+                if image is None:
+                    continue
+                normalized_items.append({"type": "image", "image": image.copy()})
+            elif item_type == "text":
+                normalized_items.append({"type": "text", "text": str(item.get("text", "")).strip()})
+        return normalized_items
+
+    text = str(content).strip()
+    return [{"type": "text", "text": text}] if text else []
+
+
+class SharedMultimodalEngine:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"
         self.processor: Any | None = None
         self.model: Any | None = None
+        self.family: str | None = None
 
     def _resolve_model_id(self) -> str:
         return self.config.models.image_describer
@@ -86,11 +167,10 @@ class Qwen25VLMultimodalEngine:
         return ("multimodal_engine", self._resolve_model_id(), self.device)
 
     def _load(self) -> None:
-        if self.processor is not None and self.model is not None:
+        if self.processor is not None and self.model is not None and self.family is not None:
             return
 
         import torch
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         cache_key = self._cache_key()
@@ -99,14 +179,12 @@ class Qwen25VLMultimodalEngine:
             print(f"[multimodal] Reusing cached model: {self._resolve_model_id()} on {self.device}")
             self.processor = cached["processor"]
             self.model = cached["model"]
+            self.family = cached["family"]
             return
 
+        self.family = _resolve_model_family(self._resolve_model_id())
         print(f"[multimodal] Loading model: {self._resolve_model_id()} on {self.device}")
-        self.processor = AutoProcessor.from_pretrained(self._resolve_model_id())
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            self._resolve_model_id(),
-            **_build_model_kwargs(),
-        )
+        self.processor, self.model = _load_model_for_family(self._resolve_model_id(), self.family)
         if not torch.cuda.is_available():
             self.model.to(self.device)
         if getattr(self.model, "generation_config", None) is not None:
@@ -116,6 +194,72 @@ class Qwen25VLMultimodalEngine:
         _get_model_cache()[cache_key] = {
             "processor": self.processor,
             "model": self.model,
+            "family": self.family,
+        }
+
+    def _prepare_inputs(
+        self,
+        *,
+        image_path: str | Path,
+        messages: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        assert self.processor is not None
+        assert self.family is not None
+
+        image: Image.Image | None = None
+        if count_image_placeholders(messages):
+            with Image.open(image_path) as opened_image:
+                image = opened_image.convert("RGB")
+                normalized_messages = [
+                    {
+                        "role": str(message.get("role", "user")),
+                        "content": _normalize_message_content(message.get("content", ""), image),
+                    }
+                    for message in messages
+                ]
+        else:
+            normalized_messages = [
+                {
+                    "role": str(message.get("role", "user")),
+                    "content": _normalize_message_content(message.get("content", ""), None),
+                }
+                for message in messages
+            ]
+
+        if self.family == "gemma3":
+            prepared_inputs = self.processor.apply_chat_template(
+                normalized_messages,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+        else:
+            rendered_prompt = self.processor.apply_chat_template(
+                normalized_messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            images = []
+            if image is not None:
+                images = [item["content"][0]["image"] for item in normalized_messages if item["content"] and item["content"][0].get("type") == "image"]
+            if images:
+                prepared_inputs = self.processor(
+                    text=[rendered_prompt],
+                    images=images,
+                    padding=True,
+                    return_tensors="pt",
+                )
+            else:
+                prepared_inputs = self.processor(
+                    text=[rendered_prompt],
+                    padding=True,
+                    return_tensors="pt",
+                )
+
+        return {
+            key: value.to(self.device) if hasattr(value, "to") else value
+            for key, value in prepared_inputs.items()
         }
 
     def _generate_from_messages(
@@ -131,37 +275,10 @@ class Qwen25VLMultimodalEngine:
         assert self.processor is not None
         assert self.model is not None
 
-        image_slots = count_image_placeholders(messages)
-        rendered_prompt = self.processor.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
+        prepared_inputs = self._prepare_inputs(
+            image_path=image_path,
+            messages=messages,
         )
-
-        images: list[Any] = []
-        if image_slots:
-            with Image.open(image_path) as image:
-                image = image.convert("RGB")
-                images = [image.copy() for _ in range(image_slots)]
-
-        if image_slots:
-            model_inputs = self.processor(
-                text=[rendered_prompt],
-                images=images,
-                padding=True,
-                return_tensors="pt",
-            )
-        else:
-            model_inputs = self.processor(
-                text=[rendered_prompt],
-                padding=True,
-                return_tensors="pt",
-            )
-
-        prepared_inputs = {
-            key: value.to(self.device) if hasattr(value, "to") else value
-            for key, value in model_inputs.items()
-        }
         prompt_token_count = int(prepared_inputs["input_ids"].shape[1])
         print(f"[{log_prefix}] Prompt token count: {prompt_token_count}")
 
@@ -234,12 +351,15 @@ class Qwen25VLMultimodalEngine:
             _get_model_cache().pop(self._cache_key(), None)
             self.processor = None
             self.model = None
+            self.family = None
             _clear_torch_memory()
             return
 
         self.processor = None
         self.model = None
+        self.family = None
 
 
-Qwen2VLImageDescriber = Qwen25VLMultimodalEngine
-QwenStoryWriter = Qwen25VLMultimodalEngine
+Qwen25VLMultimodalEngine = SharedMultimodalEngine
+Qwen2VLImageDescriber = SharedMultimodalEngine
+QwenStoryWriter = SharedMultimodalEngine
