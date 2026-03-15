@@ -16,7 +16,7 @@ from .prompts import (
     validate_description_text,
     validate_story_part_text,
 )
-from .providers import Qwen25VLMultimodalEngine, SDTurboImageGenerator, clear_cached_models
+from .providers import Qwen25VLMultimodalEngine, SSD1BTextToImageGenerator, clear_cached_models
 from .schemas import (
     DescriptionResult,
     PipelineResult,
@@ -47,7 +47,7 @@ class KidStoryPipeline:
         config: GenerationConfig = DEFAULT_CONFIG,
         describer_factory=Qwen25VLMultimodalEngine,
         writer_factory=Qwen25VLMultimodalEngine,
-        image_generator_factory=SDTurboImageGenerator,
+        image_generator_factory=SSD1BTextToImageGenerator,
     ):
         self.config = config
         self.describer_factory = describer_factory
@@ -249,8 +249,8 @@ class KidStoryPipeline:
 
             write_text(prompt_path, prompt_text)
             output_path = image_generator.generate(
-                source_image_path=run_paths.input_image_path,
                 prompt_text=prompt_text,
+                negative_prompt_text=self.config.image_negative_prompt,
                 seed=seed,
                 output_path=image_path_for_part,
             )

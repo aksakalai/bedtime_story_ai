@@ -13,7 +13,7 @@ This repository is intentionally a Phase 2A baseline, not the full end-state pro
 
 Current implemented flow:
 
-`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part image generation -> artifact files under outputs/run_* -> Gradio debug UI`
+`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part text-to-image generation -> artifact files under outputs/run_* -> Gradio debug UI`
 
 Current architecture:
 
@@ -83,4 +83,4 @@ demo.launch(debug=True, share=True, inline=False)
 
 - Description: `Qwen/Qwen2.5-VL-3B-Instruct`
 - Story drafting: `Qwen/Qwen2.5-VL-3B-Instruct`
-- Storyboard images: `stabilityai/sd-turbo`
+- Storyboard images: `segmind/SSD-1B`

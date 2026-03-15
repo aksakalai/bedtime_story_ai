@@ -5,7 +5,7 @@ import gc
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 from .config import GenerationConfig
 from .schemas import ValidationError
@@ -70,22 +70,6 @@ def _build_model_kwargs() -> dict[str, Any]:
     else:
         model_kwargs["torch_dtype"] = torch.float32
     return model_kwargs
-
-
-def _get_resample_lanczos() -> Any:
-    if hasattr(Image, "Resampling"):
-        return Image.Resampling.LANCZOS
-    return Image.LANCZOS
-
-
-def _fit_with_padding(image: Image.Image, width: int, height: int) -> Image.Image:
-    image = image.convert("RGB")
-    resized = ImageOps.contain(image, (width, height), method=_get_resample_lanczos())
-    canvas = Image.new("RGB", (width, height), color=(245, 239, 229))
-    offset_x = (width - resized.width) // 2
-    offset_y = (height - resized.height) // 2
-    canvas.paste(resized, (offset_x, offset_y))
-    return canvas
 
 
 class Qwen25VLMultimodalEngine:
@@ -261,7 +245,7 @@ Qwen2VLImageDescriber = Qwen25VLMultimodalEngine
 QwenStoryWriter = Qwen25VLMultimodalEngine
 
 
-class SDTurboImageGenerator:
+class SSD1BTextToImageGenerator:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"
@@ -278,7 +262,7 @@ class SDTurboImageGenerator:
             return
 
         import torch
-        from diffusers import AutoPipelineForImage2Image
+        from diffusers import AutoPipelineForText2Image
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         cache_key = self._cache_key()
@@ -290,14 +274,14 @@ class SDTurboImageGenerator:
 
         print(f"[image] Loading model: {self._resolve_model_id()} on {self.device}")
         if self.device == "cuda":
-            self.pipeline = AutoPipelineForImage2Image.from_pretrained(
+            self.pipeline = AutoPipelineForText2Image.from_pretrained(
                 self._resolve_model_id(),
                 torch_dtype=torch.float16,
                 variant="fp16",
                 use_safetensors=True,
             )
         else:
-            self.pipeline = AutoPipelineForImage2Image.from_pretrained(
+            self.pipeline = AutoPipelineForText2Image.from_pretrained(
                 self._resolve_model_id(),
                 use_safetensors=True,
             )
@@ -307,13 +291,17 @@ class SDTurboImageGenerator:
             self.pipeline.set_progress_bar_config(disable=True)
         if hasattr(self.pipeline, "enable_attention_slicing"):
             self.pipeline.enable_attention_slicing()
+        if hasattr(self.pipeline, "enable_vae_slicing"):
+            self.pipeline.enable_vae_slicing()
+        if hasattr(self.pipeline, "enable_vae_tiling"):
+            self.pipeline.enable_vae_tiling()
         _get_model_cache()[cache_key] = {"pipeline": self.pipeline}
 
     def generate(
         self,
         *,
-        source_image_path: str | Path,
         prompt_text: str,
+        negative_prompt_text: str,
         seed: int,
         output_path: str | Path,
     ) -> Path:
@@ -322,13 +310,6 @@ class SDTurboImageGenerator:
 
         import torch
 
-        with Image.open(source_image_path) as source_image:
-            init_image = _fit_with_padding(
-                source_image,
-                self.config.image_width,
-                self.config.image_height,
-            )
-
         if self.device == "cuda":
             generator = torch.Generator(device="cuda").manual_seed(seed)
         else:
@@ -336,9 +317,10 @@ class SDTurboImageGenerator:
 
         result = self.pipeline(
             prompt=prompt_text,
-            image=init_image,
+            negative_prompt=negative_prompt_text,
+            width=self.config.image_width,
+            height=self.config.image_height,
             num_inference_steps=self.config.image_num_inference_steps,
-            strength=self.config.image_strength,
             guidance_scale=self.config.image_guidance_scale,
             generator=generator,
         )

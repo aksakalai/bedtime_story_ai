@@ -28,7 +28,7 @@ APP_CSS = """
 }
 
 #story-shell {
-  max-width: 1180px;
+  max-width: 1320px;
   margin: 0 auto;
   padding-bottom: 32px;
 }
@@ -55,12 +55,26 @@ APP_CSS = """
 .debug-copy {
   color: var(--muted);
 }
+
+.story-part-card {
+  padding: 22px;
+  margin-top: 18px;
+}
+
+.story-part-image {
+  min-height: 520px;
+}
+
+.story-part-image img {
+  object-fit: contain;
+  background: rgba(255, 248, 238, 0.9);
+}
 """
 
 INTRO_HTML = f"""
 <div class="hero-card">
   <h1>Resident Storyboard Workbench</h1>
-  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, and one generated image for each story part.</p>
+  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, and three separate text-to-image storyboard illustrations.</p>
   <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
   <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
   <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
@@ -151,30 +165,36 @@ def build_demo() -> gr.Blocks:
                     interactive=False,
                 )
 
-            with gr.Row():
-                with gr.Column(elem_classes=["surface-card"]):
+            with gr.Column():
+                with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 1", elem_classes=["debug-title"])
-                    part_1_output = gr.Textbox(lines=8, interactive=False)
+                    part_1_output = gr.Textbox(lines=7, interactive=False)
                     part_1_image_output = gr.Image(
                         label="Part 1 image",
                         interactive=False,
                         type="filepath",
+                        height=560,
+                        elem_classes=["story-part-image"],
                     )
-                with gr.Column(elem_classes=["surface-card"]):
+                with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 2", elem_classes=["debug-title"])
-                    part_2_output = gr.Textbox(lines=8, interactive=False)
+                    part_2_output = gr.Textbox(lines=7, interactive=False)
                     part_2_image_output = gr.Image(
                         label="Part 2 image",
                         interactive=False,
                         type="filepath",
+                        height=560,
+                        elem_classes=["story-part-image"],
                     )
-                with gr.Column(elem_classes=["surface-card"]):
+                with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 3", elem_classes=["debug-title"])
-                    part_3_output = gr.Textbox(lines=8, interactive=False)
+                    part_3_output = gr.Textbox(lines=7, interactive=False)
                     part_3_image_output = gr.Image(
                         label="Part 3 image",
                         interactive=False,
                         type="filepath",
+                        height=560,
+                        elem_classes=["story-part-image"],
                     )
 
             create_button.click(

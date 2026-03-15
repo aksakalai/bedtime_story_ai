@@ -89,10 +89,11 @@ def build_story_part_image_prompt(
     part_text: str,
 ) -> str:
     return (
-        "Create one single-story illustration for this bedtime story moment. "
-        f"Scene description: {description_text} "
+        "Create one single polished storybook illustration for this exact bedtime story moment. "
+        f"Scene grounding: {description_text} "
         f"Story moment: {part_text} "
-        "Show only what belongs to this moment while staying faithful to the same setting and characters. "
+        "Show only one continuous scene from this moment, keep the setting and characters consistent across parts, "
+        "and avoid adding unrelated objects or extra characters. "
         f"{config.image_prompt_style_suffix}"
     )
 
