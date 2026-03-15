@@ -157,7 +157,22 @@ class QwenStoryWriter:
         assert self.tokenizer is not None
         assert self.model is not None
 
-        inputs = self.tokenizer(prompt_text, return_tensors="pt")
+        messages = [
+            {
+                "role": "system",
+                "content": "You write only clean bedtime-story prose. Follow the user's formatting and length instructions exactly.",
+            },
+            {
+                "role": "user",
+                "content": prompt_text,
+            },
+        ]
+        rendered_prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        inputs = self.tokenizer(rendered_prompt, return_tensors="pt")
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         prompt_token_count = int(inputs["input_ids"].shape[1])
         print(f"[story] Prompt token count: {prompt_token_count}")
@@ -166,6 +181,7 @@ class QwenStoryWriter:
             max_new_tokens=self.config.story_part_max_tokens,
             do_sample=False,
             pad_token_id=self.tokenizer.eos_token_id,
+            eos_token_id=self.tokenizer.eos_token_id,
         )
         prompt_length = inputs["input_ids"].shape[1]
         completion_ids = output_ids[0][prompt_length:]
@@ -185,6 +201,7 @@ class QwenStoryWriter:
             f"hit_token_cap={hit_token_cap}, "
             f"ended_with_eos={ended_with_eos}"
         )
+        print(f"[story] Output word count: {len(decoded.split())}")
         print(f"[story] Output tail preview: {tail_preview}")
         return decoded
 

@@ -23,8 +23,8 @@ class PromptTests(unittest.TestCase):
         )
         self.assertIn("Drawing description:", prompt)
         self.assertIn("A rabbit stands by a moonlit pond.", prompt)
-        self.assertIn("first part of the story", prompt)
-        self.assertIn("most visible details from the drawing", prompt)
+        self.assertIn("beginning of a three-part bedtime story", prompt)
+        self.assertIn("calm starting situation", prompt)
         self.assertNotIn("Accepted story so far:", prompt)
 
     def test_build_story_part_2_prompt_includes_part_1_exactly(self):
@@ -35,7 +35,7 @@ class PromptTests(unittest.TestCase):
         )
         self.assertIn("Accepted story so far:", prompt)
         self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
-        self.assertIn("second part of the same story", prompt)
+        self.assertIn("middle of the same story", prompt)
         self.assertIn("specific gentle event", prompt)
 
     def test_build_story_part_3_prompt_includes_part_1_and_part_2(self):
@@ -49,10 +49,11 @@ class PromptTests(unittest.TestCase):
         )
         self.assertIn("1. The rabbit padded softly toward the quiet water under the moon.", prompt)
         self.assertIn("2. He watched silver ripples drift across the pond and listened to the reeds.", prompt)
-        self.assertIn("third and final part", prompt)
-        self.assertIn("Resolve the middle event clearly", prompt)
-        self.assertIn("last sentence must clearly close the story", prompt)
+        self.assertIn("ending of the same story", prompt)
+        self.assertIn("resolve the gentle event", prompt.lower())
+        self.assertIn("Do not start a new event.", prompt)
         self.assertIn("End with a complete sentence.", prompt)
+        self.assertIn("Stop immediately after the paragraph.", prompt)
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):
