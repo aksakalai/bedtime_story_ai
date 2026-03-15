@@ -96,8 +96,6 @@ def build_story_part_prompt(
         - Stay grounded in the drawing description and use concrete visual details from it.
         - Evaluate the uniquely identifiable details from the drawing description and make sure they appear naturally in the story, especially in part 1 and part 2.
         - Keep the same major objects, colors, and setting consistent across all three parts.
-        - Do not move the story to an unrelated indoor or outdoor place.
-        - Do not introduce a new place, weather pattern, or major object that is not supported by the drawing description.
         - Keep the full arc clear: setup in part 1, event in part 2, conclusion in part 3.
         - Keep the tone warm, gentle, and bedtime-friendly.
         - Aim for about 45 to 65 words, but finish the paragraph cleanly.

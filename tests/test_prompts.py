@@ -61,7 +61,6 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Stop immediately after the paragraph.", prompt)
         self.assertIn("The story must take place in the exact pictured scene", prompt)
         self.assertIn("uniquely identifiable details from the drawing description", prompt)
-        self.assertIn("Do not move the story to an unrelated indoor or outdoor place.", prompt)
 
     def test_validate_description_text_rejects_structured_markers(self):
         with self.assertRaises(ValidationError):
