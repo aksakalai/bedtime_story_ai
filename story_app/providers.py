@@ -4,6 +4,8 @@ import gc
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 from .config import GenerationConfig
 
 
