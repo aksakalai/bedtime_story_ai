@@ -18,5 +18,5 @@ python -m story_app
 
 ## Models
 
-- Description: `Qwen/Qwen2.5-VL-3B-Instruct`
+- Description: `HuggingFaceTB/SmolVLM-500M-Instruct`
 - Story drafting: `Qwen/Qwen2.5-1.5B-Instruct`

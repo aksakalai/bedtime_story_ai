@@ -24,7 +24,7 @@ def _torch_dtype():
     return torch.float16 if torch.cuda.is_available() else torch.float32
 
 
-class QwenVLImageDescriber:
+class SmolVLMImageDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"
@@ -36,51 +36,52 @@ class QwenVLImageDescriber:
             return
 
         import torch
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+        from transformers import AutoProcessor
+
+        try:
+            from transformers import AutoModelForImageTextToText
+
+            model_class = AutoModelForImageTextToText
+        except ImportError:
+            from transformers import AutoModelForVision2Seq
+
+            model_class = AutoModelForVision2Seq
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[describe] Loading model: {self.config.models.image_describer} on {self.device}")
         self.processor = AutoProcessor.from_pretrained(self.config.models.image_describer)
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        self.model = model_class.from_pretrained(
             self.config.models.image_describer,
-            torch_dtype="auto",
-            device_map="auto",
+            torch_dtype=_torch_dtype(),
         )
-        try:
-            self.device = str(next(self.model.parameters()).device)
-        except StopIteration:
-            self.device = "cpu"
+        self.model.to(self.device)
 
     def describe(self, image_path: str | Path, prompt_text: str) -> str:
         self._load()
         assert self.processor is not None
         assert self.model is not None
 
-        from qwen_vl_utils import process_vision_info
+        with Image.open(image_path) as image:
+            image = image.convert("RGB")
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt_text},
+                    ],
+                }
+            ]
+            rendered_prompt = self.processor.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+            )
+            model_inputs = self.processor(
+                text=rendered_prompt,
+                images=[image],
+                return_tensors="pt",
+            )
 
-        image_uri = Path(image_path).resolve().as_uri()
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image_uri},
-                    {"type": "text", "text": prompt_text},
-                ],
-            }
-        ]
-        rendered_prompt = self.processor.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        image_inputs, video_inputs = process_vision_info(messages)
-        model_inputs = self.processor(
-            text=[rendered_prompt],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        )
         prepared_inputs: dict[str, Any] = {}
         for key, value in model_inputs.items():
             if getattr(value, "dtype", None) is not None and value.dtype.is_floating_point:
@@ -93,15 +94,9 @@ class QwenVLImageDescriber:
             max_new_tokens=self.config.description_max_tokens,
             do_sample=False,
         )
-        generated_ids_trimmed = [
-            out_ids[len(in_ids):]
-            for in_ids, out_ids in zip(prepared_inputs["input_ids"], generated_ids)
-        ]
-        return self.processor.batch_decode(
-            generated_ids_trimmed,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )[0].strip()
+        prompt_length = prepared_inputs["input_ids"].shape[1]
+        completion = generated_ids[:, prompt_length:]
+        return self.processor.batch_decode(completion, skip_special_tokens=True)[0].strip()
 
     def unload(self) -> None:
         self.processor = None
