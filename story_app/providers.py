@@ -4,6 +4,7 @@ import gc
 import re
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from .assets import write_text
 from .config import GenerationConfig
@@ -37,8 +38,7 @@ def _preview_text(raw_text: str, limit: int = 600) -> str:
     text = re.sub(r"\s+", " ", raw_text).strip()
     return text[:limit] + ("..." if len(text) > limit else "")
 
-
-class SmolVLMDescriber:
+class FlorenceDrawingDescriber:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.processor: Any | None = None
@@ -50,23 +50,26 @@ class SmolVLMDescriber:
             return
 
         import torch
-        from transformers import AutoProcessor
-
-        try:
-            from transformers import AutoModelForImageTextToText
-
-            model_cls = AutoModelForImageTextToText
-        except ImportError:
-            from transformers import AutoModelForVision2Seq
-
-            model_cls = AutoModelForVision2Seq
+        from transformers import AutoModelForCausalLM, AutoProcessor
+        from transformers.dynamic_module_utils import get_imports as original_get_imports
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.processor = AutoProcessor.from_pretrained(self.config.models.drawing_describer)
-        self.model = model_cls.from_pretrained(
-            self.config.models.drawing_describer,
-            torch_dtype=_torch_dtype(),
-        )
+        def florence_get_imports(filename: str) -> list[str]:
+            imports = original_get_imports(filename)
+            if not filename.endswith("modeling_florence2.py"):
+                return imports
+            return [item for item in imports if item != "flash_attn"]
+
+        with patch("transformers.dynamic_module_utils.get_imports", florence_get_imports):
+            self.processor = AutoProcessor.from_pretrained(
+                self.config.models.drawing_describer,
+                trust_remote_code=True,
+            )
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.config.models.drawing_describer,
+                trust_remote_code=True,
+                torch_dtype=_torch_dtype(),
+            )
         self.model.to(self.device)
 
     def _generate_text(self, image_path: str | Path, prompt: str, max_new_tokens: int) -> str:
@@ -78,34 +81,38 @@ class SmolVLMDescriber:
 
         with Image.open(image_path) as image:
             image = image.convert("RGB")
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image"},
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ]
-            rendered_prompt = self.processor.apply_chat_template(
-                messages,
-                add_generation_prompt=True,
-            )
-            inputs = self.processor(
-                text=rendered_prompt,
-                images=[image],
+            model_inputs = self.processor(
+                text=prompt,
+                images=image,
                 return_tensors="pt",
             )
+            pixel_values = model_inputs["pixel_values"].to(self.device, dtype=_torch_dtype())
+            input_ids = model_inputs["input_ids"].to(self.device)
+            attention_mask = model_inputs.get("attention_mask")
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(self.device)
 
-        model_inputs = {key: value.to(self.device) for key, value in inputs.items()}
-        generated_ids = self.model.generate(
-            **model_inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-        )
-        prompt_length = model_inputs["input_ids"].shape[1]
-        completion = generated_ids[:, prompt_length:]
-        return self.processor.batch_decode(completion, skip_special_tokens=True)[0]
+            generated_ids = self.model.generate(
+                input_ids=input_ids,
+                pixel_values=pixel_values,
+                attention_mask=attention_mask,
+                max_new_tokens=max_new_tokens,
+                num_beams=1,
+                do_sample=False,
+            )
+
+            generated_text = self.processor.batch_decode(
+                generated_ids,
+                skip_special_tokens=False,
+            )[0]
+            parsed = self.processor.post_process_generation(
+                generated_text,
+                task=prompt,
+                image_size=(image.width, image.height),
+            )
+        if isinstance(parsed, dict):
+            return str(parsed.get(prompt, "")).strip()
+        return str(parsed).strip()
 
     def describe(
         self,
@@ -126,7 +133,7 @@ class SmolVLMDescriber:
             write_text(response_path, raw_text)
 
         print(f"[describe] Raw preview: {_preview_text(raw_text)}")
-        return parse_description_response(raw_text)
+        return parse_description_response(raw_text, self.config)
 
     def unload(self) -> None:
         self.model = None
@@ -193,7 +200,10 @@ class QwenStoryWriter:
         messages = [
             {
                 "role": "system",
-                "content": "You follow label formats exactly. Never use JSON or extra commentary.",
+                "content": (
+                    "You follow output formats exactly. Use the PART_BREAK token exactly as requested "
+                    "and do not emit JSON or extra commentary."
+                ),
             },
             {"role": "user", "content": prompt},
         ]

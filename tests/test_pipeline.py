@@ -10,12 +10,7 @@ from story_app.schemas import DrawingDescription, StoryPackage, StoryPart
 
 
 VALID_DESCRIPTION = DrawingDescription(
-    summary="A rabbit stands beside a moonlit pond and listens to the quiet water.",
-    characters=["rabbit", "moon", "pond"],
-    setting="a moonlit pond in a quiet meadow",
-    visual_style="colored pencil storybook art",
-    color_palette=["navy", "silver", "cream"],
-    safety_notes=["gentle mood", "bedtime calm", "no danger"],
+    text="A rabbit stands beside a moonlit pond and listens to the quiet water under silver stars.",
 )
 
 
@@ -153,7 +148,7 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.SmolVLMDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", FakeWriter
             ), patch("story_app.pipeline.SSD1BSceneGenerator", ShouldNotStartImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", _BaseFakeNarrator
@@ -185,7 +180,7 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.SmolVLMDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
             ), patch("story_app.pipeline.SSD1BSceneGenerator", FakeImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", ShouldNotNarrate
@@ -220,7 +215,7 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.SmolVLMDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
             ), patch("story_app.pipeline.SSD1BSceneGenerator", _BaseFakeImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", FakeNarrator
@@ -234,7 +229,7 @@ class PipelineTests(unittest.TestCase):
             root = Path(tmpdir)
             input_path = self._create_input_file(root)
             config = GenerationConfig(outputs_root=root / "outputs")
-            with patch("story_app.pipeline.SmolVLMDescriber", _BaseFakeDescriber), patch(
+            with patch("story_app.pipeline.FlorenceDrawingDescriber", _BaseFakeDescriber), patch(
                 "story_app.pipeline.QwenStoryWriter", _BaseFakeWriter
             ), patch("story_app.pipeline.SSD1BSceneGenerator", _BaseFakeImageGenerator), patch(
                 "story_app.pipeline.KokoroNarrator", _BaseFakeNarrator

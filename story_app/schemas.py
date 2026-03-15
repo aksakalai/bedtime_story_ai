@@ -25,23 +25,11 @@ def _ensure_string(value: Any, field_name: str) -> str:
 
 @dataclass
 class DrawingDescription:
-    summary: str
-    characters: list[str]
-    setting: str
-    visual_style: str
-    color_palette: list[str]
-    safety_notes: list[str]
+    text: str
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DrawingDescription":
-        return cls(
-            summary=_ensure_string(data.get("summary"), "summary"),
-            characters=_ensure_list_of_strings(data.get("characters"), "characters"),
-            setting=_ensure_string(data.get("setting"), "setting"),
-            visual_style=_ensure_string(data.get("visual_style"), "visual_style"),
-            color_palette=_ensure_list_of_strings(data.get("color_palette"), "color_palette"),
-            safety_notes=_ensure_list_of_strings(data.get("safety_notes"), "safety_notes"),
-        )
+        return cls(text=_ensure_string(data.get("text"), "text"))
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

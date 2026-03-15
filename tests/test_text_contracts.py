@@ -6,58 +6,29 @@ from story_app.schemas import SchemaError
 
 
 class TextContractTests(unittest.TestCase):
-    def test_parse_description_response_reads_labeled_lines(self):
-        raw_text = "\n".join(
-            [
-                "SUMMARY: A calm rabbit stands beside a moonlit pond.",
-                "CHARACTERS: rabbit, moon, pond",
-                "SETTING: a moonlit pond in a quiet meadow",
-                "STYLE: colored pencil storybook art",
-                "COLORS: navy, silver, cream",
-                "SAFETY: gentle mood, bedtime calm, no danger",
-            ]
+    def test_parse_description_response_keeps_single_description_string(self):
+        raw_text = (
+            "A calm rabbit stands beside a moonlit pond while silver stars reflect in the water "
+            "and soft reeds sway in the quiet night."
         )
 
-        description = parse_description_response(raw_text)
-        self.assertEqual(description.characters, ["rabbit", "moon", "pond"])
-        self.assertEqual(description.color_palette, ["navy", "silver", "cream"])
+        description = parse_description_response(raw_text, DEFAULT_CONFIG)
+        self.assertIn("moonlit pond", description.text)
 
-    def test_parse_description_response_rejects_missing_labels(self):
-        raw_text = "\n".join(
-            [
-                "SUMMARY: A calm rabbit stands beside a moonlit pond.",
-                "CHARACTERS: rabbit, moon, pond",
-                "SETTING: a moonlit pond in a quiet meadow",
-                "STYLE: colored pencil storybook art",
-                "COLORS: navy, silver, cream",
-            ]
-        )
-
+    def test_parse_description_response_rejects_too_short_output(self):
         with self.assertRaises(SchemaError):
-            parse_description_response(raw_text)
+            parse_description_response("House. Trees. Sun. Car.", DEFAULT_CONFIG)
 
-    def test_parse_description_response_rejects_malformed_character_line(self):
-        raw_text = "\n".join(
-            [
-                "SUMMARY: A calm rabbit stands beside a moonlit pond.",
-                "CHARACTERS: rabbit; moon; pond",
-                "SETTING: a moonlit pond in a quiet meadow",
-                "STYLE: colored pencil storybook art",
-                "COLORS: navy, silver, cream",
-                "SAFETY: gentle mood, bedtime calm, no danger",
-            ]
-        )
-
-        with self.assertRaises(SchemaError):
-            parse_description_response(raw_text)
-
-    def test_parse_story_response_reads_three_parts(self):
+    def test_parse_story_response_reads_title_and_three_parts(self):
         raw_text = "\n".join(
             [
                 "TITLE: Rabbit and the Quiet Pond",
-                "PART1_ENTRANCE: The rabbit wandered to the pond and listened to the night settle softly around the water.",
-                "PART2_BUILDUP: The moon reflected in the pond while the rabbit noticed gentle ripples, friendly reeds, and the quiet hush of bedtime.",
-                "PART3_ENDING: The rabbit curled beside the pond, watched the silver light fade into sleep, and rested in a calm dreamy hush.",
+                "PARTS:",
+                "The rabbit wandered to the pond and listened to the night settle softly around the water while a calm adventure began there.",
+                DEFAULT_CONFIG.story_separator_token,
+                "The moon reflected in the pond while the rabbit noticed gentle ripples, friendly reeds, and the quiet hush of bedtime all around.",
+                DEFAULT_CONFIG.story_separator_token,
+                "The rabbit curled beside the pond, watched the silver light fade into sleep, and rested in a calm dreamy hush until morning.",
             ]
         )
 
@@ -65,27 +36,46 @@ class TextContractTests(unittest.TestCase):
         self.assertEqual([part.scene_goal for part in story.parts], ["entrance", "buildup", "ending"])
         self.assertEqual(story.title, "Rabbit and the Quiet Pond")
 
-    def test_parse_story_response_rejects_empty_or_duplicate_label_lines(self):
+    def test_parse_story_response_rejects_missing_parts_header(self):
         raw_text = "\n".join(
             [
                 "TITLE: Rabbit and the Quiet Pond",
-                "PART1_ENTRANCE: The rabbit wandered to the pond and listened to the night settle softly around the water.",
-                "PART1_ENTRANCE: The moon reflected in the pond while the rabbit noticed gentle ripples, friendly reeds, and the quiet hush of bedtime.",
-                "PART3_ENDING: ",
+                "The rabbit wandered to the pond and listened to the night settle softly around the water while a calm adventure began there.",
+                DEFAULT_CONFIG.story_separator_token,
+                "The moon reflected in the pond while the rabbit noticed gentle ripples, friendly reeds, and the quiet hush of bedtime all around.",
+                DEFAULT_CONFIG.story_separator_token,
+                "The rabbit curled beside the pond, watched the silver light fade into sleep, and rested in a calm dreamy hush until morning.",
             ]
         )
 
         with self.assertRaises(SchemaError):
             parse_story_response(raw_text, DEFAULT_CONFIG)
 
-    def test_parse_story_response_rejects_extra_story_part(self):
+    def test_parse_story_response_rejects_wrong_separator_count(self):
         raw_text = "\n".join(
             [
                 "TITLE: Rabbit and the Quiet Pond",
-                "PART1_ENTRANCE: The rabbit wandered to the pond and listened to the night settle softly around the water.",
-                "PART2_BUILDUP: The moon reflected in the pond while the rabbit noticed gentle ripples, friendly reeds, and the quiet hush of bedtime.",
-                "PART3_ENDING: The rabbit curled beside the pond, watched the silver light fade into sleep, and rested in a calm dreamy hush.",
-                "PART4_CODA: Extra ending text.",
+                "PARTS:",
+                "Part one text with enough words to satisfy the parser and keep the story calm and gentle.",
+                "Part two text without the required separator token in between the story sections.",
+                DEFAULT_CONFIG.story_separator_token,
+                "Part three text with enough words to satisfy the parser and keep the story calm and gentle.",
+            ]
+        )
+
+        with self.assertRaises(SchemaError):
+            parse_story_response(raw_text, DEFAULT_CONFIG)
+
+    def test_parse_story_response_rejects_short_part(self):
+        raw_text = "\n".join(
+            [
+                "TITLE: Rabbit and the Quiet Pond",
+                "PARTS:",
+                "Too short for this parser.",
+                DEFAULT_CONFIG.story_separator_token,
+                "This second part has enough words to satisfy the minimum length requirement for the deterministic parser to accept it.",
+                DEFAULT_CONFIG.story_separator_token,
+                "This third part also has enough words to satisfy the minimum length requirement for the deterministic parser to accept it.",
             ]
         )
 

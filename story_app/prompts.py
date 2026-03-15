@@ -1,25 +1,10 @@
 from __future__ import annotations
 
+import re
 from textwrap import dedent
 
 from .config import GenerationConfig
 from .schemas import DrawingDescription, SchemaError, StoryPackage, StoryPart
-
-DESCRIPTION_RESPONSE_LABELS = (
-    "SUMMARY",
-    "CHARACTERS",
-    "SETTING",
-    "STYLE",
-    "COLORS",
-    "SAFETY",
-)
-
-STORY_RESPONSE_LABELS = (
-    "TITLE",
-    "PART1_ENTRANCE",
-    "PART2_BUILDUP",
-    "PART3_ENDING",
-)
 
 
 def _clip_words(text: str, max_words: int) -> str:
@@ -27,135 +12,114 @@ def _clip_words(text: str, max_words: int) -> str:
     return " ".join(words[:max_words])
 
 
-def _parse_exact_labeled_lines(raw_text: str, expected_labels: tuple[str, ...]) -> dict[str, str]:
-    stripped = raw_text.strip()
-    if not stripped:
+def _normalize_text_block(raw_text: str) -> str:
+    text = re.sub(r"\s+", " ", raw_text).strip()
+    if not text:
         raise SchemaError("Model output was empty.")
-
-    lines = stripped.splitlines()
-    if len(lines) != len(expected_labels):
-        raise SchemaError(
-            f"Expected exactly {len(expected_labels)} labeled lines, received {len(lines)}."
-        )
-
-    parsed: dict[str, str] = {}
-    for expected_label, line in zip(expected_labels, lines):
-        prefix = f"{expected_label}:"
-        if not line.startswith(prefix):
-            raise SchemaError(f"Expected line to start with '{prefix}'.")
-        value = line[len(prefix):].strip()
-        if not value:
-            raise SchemaError(f"{expected_label} must not be empty.")
-        parsed[expected_label] = value
-    return parsed
+    return text
 
 
-def _parse_comma_separated_values(value: str, label: str) -> list[str]:
-    if ";" in value:
-        raise SchemaError(f"{label} must use commas only.")
-
-    items = [item.strip() for item in value.split(",")]
-    if not items or any(not item for item in items):
-        raise SchemaError(f"{label} must be a comma-separated list of non-empty strings.")
-    return items
+def _word_count(text: str) -> int:
+    return len(text.split())
 
 
-def build_description_prompt(config: GenerationConfig) -> str:
-    return dedent(
-        f"""
-        You are helping a deterministic bedtime-story pipeline describe a child's drawing.
-        Return exactly 6 lines and nothing else.
-        Keep every value on the same line as its label.
-
-        Use this exact format and label order:
-        SUMMARY: <one calm summary sentence>
-        CHARACTERS: <comma-separated recurring characters or key objects>
-        SETTING: <short setting phrase>
-        STYLE: <short visual style phrase>
-        COLORS: <comma-separated main colors>
-        SAFETY: <comma-separated bedtime-safety notes>
-
-        Rules:
-        - Keep the content kid-safe, gentle, and bedtime-friendly.
-        - Infer the recurring characters and the main setting from the drawing.
-        - Do not use JSON, bullets, markdown, code fences, or extra commentary.
-        - Use English only.
-        - Assume the final audience is ages {config.age_range}.
-        """
-    ).strip()
+def build_description_prompt(_config: GenerationConfig) -> str:
+    return "<MORE_DETAILED_CAPTION>"
 
 
 def build_story_prompt(description: DrawingDescription, config: GenerationConfig) -> str:
-    safety_guidance = "; ".join(description.safety_notes)
-    characters = ", ".join(description.characters)
-    colors = ", ".join(description.color_palette)
     return dedent(
         f"""
         You write warm bedtime stories for children ages {config.age_range}.
-        Return exactly 4 lines and nothing else.
-        Keep every value on the same line as its label.
+        Use the drawing description below to create one story with exactly 3 parts.
 
-        Use this exact format and label order:
-        TITLE: <short story title>
-        PART1_ENTRANCE: <the story entrance in 1 or 2 sentences>
-        PART2_BUILDUP: <the gentle buildup in 1 or 2 sentences>
-        PART3_ENDING: <the calm ending in 1 or 2 sentences>
+        Return exactly this structure and nothing else:
+        TITLE: <short title on one line>
+        PARTS:
+        <entrance part>
+        {config.story_separator_token}
+        <buildup part>
+        {config.story_separator_token}
+        <ending part>
 
-        Story rules:
+        Rules:
         - English only.
-        - Use one or more recurring characters from the drawing.
-        - Make PART1_ENTRANCE the entrance of the story.
-        - Make PART2_BUILDUP the middle buildup of the story.
-        - Make PART3_ENDING the bedtime-ready ending of the story.
-        - Each part should be around 35 to 55 words.
-        - Keep the tone calm, cozy, and bedtime-friendly.
+        - Keep the same core characters and setting from the drawing description.
+        - Part 1 must be the entrance.
+        - Part 2 must be the buildup.
+        - Part 3 must be the ending.
+        - Each part should be 35 to 55 words.
+        - Keep the tone calm, gentle, cozy, and bedtime-friendly.
         - Avoid scary, violent, or high-stakes conflict.
-        - Do not use JSON, bullets, markdown, code fences, or extra commentary.
+        - Use the separator token exactly two times.
+        - Do not use JSON, markdown, bullets, or extra commentary.
 
         Drawing description:
-        SUMMARY: {description.summary}
-        CHARACTERS: {characters}
-        SETTING: {description.setting}
-        STYLE: {description.visual_style}
-        COLORS: {colors}
-        SAFETY: {safety_guidance}
+        {description.text}
         """
     ).strip()
 
 
-def parse_description_response(raw_text: str) -> DrawingDescription:
-    parsed = _parse_exact_labeled_lines(raw_text, DESCRIPTION_RESPONSE_LABELS)
-    return DrawingDescription(
-        summary=parsed["SUMMARY"],
-        characters=_parse_comma_separated_values(parsed["CHARACTERS"], "CHARACTERS"),
-        setting=parsed["SETTING"],
-        visual_style=parsed["STYLE"],
-        color_palette=_parse_comma_separated_values(parsed["COLORS"], "COLORS"),
-        safety_notes=_parse_comma_separated_values(parsed["SAFETY"], "SAFETY"),
-    )
+def parse_description_response(raw_text: str, config: GenerationConfig) -> DrawingDescription:
+    text = _normalize_text_block(raw_text)
+    if _word_count(text) < config.min_description_words:
+        raise SchemaError(
+            f"Description must contain at least {config.min_description_words} words."
+        )
+    return DrawingDescription(text=text)
 
 
 def parse_story_response(raw_text: str, config: GenerationConfig) -> StoryPackage:
-    parsed = _parse_exact_labeled_lines(raw_text, STORY_RESPONSE_LABELS)
+    stripped = raw_text.strip()
+    if not stripped:
+        raise SchemaError("Story response was empty.")
+
+    lines = stripped.splitlines()
+    if len(lines) < 4:
+        raise SchemaError("Story response must include a title and three parts.")
+
+    title_line = lines[0].strip()
+    if not title_line.startswith("TITLE:"):
+        raise SchemaError("Story response must start with 'TITLE:'.")
+    title = title_line[len("TITLE:"):].strip()
+    if not title:
+        raise SchemaError("Story title must not be empty.")
+
+    if lines[1].strip() != "PARTS:":
+        raise SchemaError("Story response must include a 'PARTS:' line after the title.")
+
+    body = "\n".join(lines[2:]).strip()
+    separator_count = body.count(config.story_separator_token)
+    if separator_count != 2:
+        raise SchemaError(
+            f"Story response must include exactly 2 '{config.story_separator_token}' tokens."
+        )
+
+    raw_parts = [part.strip() for part in body.split(config.story_separator_token)]
+    if len(raw_parts) != 3 or any(not part for part in raw_parts):
+        raise SchemaError("Story response must contain exactly 3 non-empty parts.")
+
+    parts = [
+        StoryPart(scene_goal=scene_goal, story_text=_normalize_text_block(part))
+        for scene_goal, part in zip(("entrance", "buildup", "ending"), raw_parts)
+    ]
+    for part in parts:
+        if _word_count(part.story_text) < config.min_story_part_words:
+            raise SchemaError(
+                f"Story part '{part.scene_goal}' must contain at least {config.min_story_part_words} words."
+            )
+
     return StoryPackage(
-        title=parsed["TITLE"],
+        title=title,
         age_range=config.age_range,
-        parts=[
-            StoryPart(scene_goal="entrance", story_text=parsed["PART1_ENTRANCE"]),
-            StoryPart(scene_goal="buildup", story_text=parsed["PART2_BUILDUP"]),
-            StoryPart(scene_goal="ending", story_text=parsed["PART3_ENDING"]),
-        ],
+        parts=parts,
     )
 
 
 def build_character_bible(description: DrawingDescription) -> str:
-    characters = ", ".join(description.characters[:3])
-    colors = ", ".join(description.color_palette[:4])
     return (
-        f"storybook illustration, { _clip_words(description.visual_style, 6) }, "
-        f"{ _clip_words(description.setting, 8) }, "
-        f"consistent characters: {characters}, colors: {colors}, "
-        f"gentle mood, bedtime atmosphere"
+        f"storybook illustration, same recurring visual world as this drawing description: "
+        f"{_clip_words(description.text, 40)}"
     )
 
 
@@ -164,13 +128,13 @@ def enrich_story_with_image_prompts(
     description: DrawingDescription,
     config: GenerationConfig,
 ) -> StoryPackage:
-    character_bible = build_character_bible(description)
+    description_context = build_character_bible(description)
     enriched_parts: list[StoryPart] = []
     for index, part in enumerate(story.parts, start=1):
-        scene_focus = _clip_words(part.story_text, 20)
+        scene_focus = _clip_words(part.story_text, 24)
         prompt = (
-            f"{character_bible}, scene {index}, {part.scene_goal}, "
-            f"{scene_focus}, cohesive storybook scene, no text"
+            f"{description_context}, scene {index}, {part.scene_goal}, "
+            f"scene details: {scene_focus}, bedtime mood, cohesive children's book art, no text"
         )
         enriched_parts.append(
             StoryPart(

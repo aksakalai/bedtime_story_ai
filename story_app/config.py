@@ -6,7 +6,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class ModelIds:
-    drawing_describer: str = "HuggingFaceTB/SmolVLM-500M-Instruct"
+    drawing_describer: str = "microsoft/Florence-2-base"
     story_writer: str = "Qwen/Qwen2.5-1.5B-Instruct"
     scene_generator: str = "segmind/SSD-1B"
     narrator: str = "hexgrad/Kokoro-82M"
@@ -25,6 +25,9 @@ class GenerationConfig:
     narrator_speed: float = 0.96
     random_seed: int = 42
     age_range: str = "5-10"
+    story_separator_token: str = "<PART_BREAK>"
+    min_description_words: int = 8
+    min_story_part_words: int = 20
     image_negative_prompt: str = (
         "blurry, scary, horror, violence, gore, text, watermark, logo, low quality, deformed"
     )

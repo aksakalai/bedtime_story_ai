@@ -8,15 +8,15 @@ class JsonUtilsTests(unittest.TestCase):
     def test_extract_json_payload_from_wrapped_text(self):
         raw = """
         Here is the result:
-        {"summary":"A moonlit fox","characters":["fox"],"setting":"forest","visual_style":"crayon","color_palette":["blue","gold"],"safety_notes":["gentle","sleepy"]}
+        {"text":"A moonlit fox waits in a quiet forest while blue and gold light glows across the trees."}
         """
         payload = extract_json_payload(raw)
-        self.assertEqual(payload["summary"], "A moonlit fox")
+        self.assertIn("moonlit fox", payload["text"])
 
     def test_parse_json_response_validates_schema(self):
-        raw = '{"summary":"A moonlit fox","characters":["fox"],"setting":"forest","visual_style":"crayon","color_palette":["blue","gold"],"safety_notes":["gentle","sleepy"]}'
+        raw = '{"text":"A moonlit fox waits in a quiet forest while blue and gold light glows across the trees."}'
         description = parse_json_response(raw, DrawingDescription)
-        self.assertEqual(description.characters, ["fox"])
+        self.assertIn("moonlit fox", description.text)
 
     def test_extract_json_payload_raises_on_missing_object(self):
         with self.assertRaises(SchemaError):

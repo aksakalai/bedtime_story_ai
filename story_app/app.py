@@ -8,7 +8,7 @@ import gradio as gr
 from .pipeline import KidStoryPipeline
 from .schemas import StoryPackage
 
-APP_BUILD = "deterministic-v1-20260315"
+APP_BUILD = "deterministic-v2-20260315"
 
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;700&display=swap');
@@ -113,7 +113,7 @@ INTRO_HTML = """
 <div class="hero-card">
   <h1>Kid Drawing to Bedtime Story</h1>
   <p>Upload one drawing and the app will turn it into a calm three-part bedtime story, three matching illustrations, spoken narration, and one final story video with built-in playback controls.</p>
-  <p><strong>Build:</strong> deterministic-v1-20260315</p>
+  <p><strong>Build:</strong> deterministic-v2-20260315</p>
 </div>
 """
 

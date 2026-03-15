@@ -8,7 +8,7 @@ from .assets import RunPaths, build_run_manifest, prepare_run_paths, write_json
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .playback import build_playback_panel_html, build_timeline
 from .prompts import build_story_markdown
-from .providers import KokoroNarrator, QwenStoryWriter, SSD1BSceneGenerator, SmolVLMDescriber
+from .providers import FlorenceDrawingDescriber, KokoroNarrator, QwenStoryWriter, SSD1BSceneGenerator
 from .schemas import EXPECTED_SCENE_GOALS, DrawingDescription, PipelineResult, StoryPackage
 from .video import render_story_video
 
@@ -51,14 +51,8 @@ class KidStoryPipeline:
         )
 
     def _validate_description(self, description: DrawingDescription) -> None:
-        if not description.summary.strip():
-            raise RuntimeError("Drawing description summary must not be empty.")
-        if not description.characters:
-            raise RuntimeError("Drawing description must include at least one character or object.")
-        if not description.color_palette:
-            raise RuntimeError("Drawing description must include at least one color.")
-        if not description.safety_notes:
-            raise RuntimeError("Drawing description must include at least one safety note.")
+        if not description.text.strip():
+            raise RuntimeError("Drawing description must not be empty.")
 
     def _validate_story(
         self,
@@ -113,7 +107,7 @@ class KidStoryPipeline:
         _seed_everything(self.config.random_seed)
         print(f"[pipeline] Run directory: {run_paths.run_dir}")
 
-        describer = SmolVLMDescriber(self.config)
+        describer = FlorenceDrawingDescriber(self.config)
         try:
             self._notify(progress_callback, 0.12, "Describing the drawing")
             description = describer.describe(
