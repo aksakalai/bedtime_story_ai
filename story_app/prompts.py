@@ -26,8 +26,6 @@ def normalize_text(raw_text: str) -> str:
     if not text:
         raise ValidationError("Model output was empty.")
     return text
-
-
 def build_description_prompt(config: GenerationConfig) -> str:
     return config.description_prompt_prefix
 

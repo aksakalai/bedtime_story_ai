@@ -81,6 +81,5 @@ class PromptTests(unittest.TestCase):
                 DEFAULT_CONFIG,
             )
 
-
 if __name__ == "__main__":
     unittest.main()
