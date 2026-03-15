@@ -16,17 +16,11 @@ class DescriptionResult:
 
 
 @dataclass(frozen=True)
-class StoryStep:
-    step_name: str
-    prompt_text: str
-    output_text: str
-
-
-@dataclass(frozen=True)
 class StoryDraft:
-    description: DescriptionResult
-    steps: list[StoryStep]
     full_conversation_text: str
+    part_1_text: str
+    part_2_text: str
+    part_3_text: str
 
 
 @dataclass(frozen=True)
@@ -36,11 +30,9 @@ class RunPaths:
     input_image_path: Path
     description_prompt_path: Path
     description_path: Path
-    story_part_1_prompt_path: Path
+    story_conversation_path: Path
     story_part_1_path: Path
-    story_part_2_prompt_path: Path
     story_part_2_path: Path
-    story_part_3_prompt_path: Path
     story_part_3_path: Path
 
 
@@ -49,8 +41,9 @@ class PipelineResult:
     run_id: str
     run_dir: Path
     input_image_path: str
-    description_text: str
+    description: DescriptionResult
+    draft: StoryDraft
+    full_conversation_text: str
     part_1_text: str
     part_2_text: str
     part_3_text: str
-    draft: StoryDraft

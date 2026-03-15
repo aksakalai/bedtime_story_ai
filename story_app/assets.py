@@ -34,10 +34,8 @@ def prepare_run_paths(source_image_path: str | Path, outputs_root: Path) -> RunP
         input_image_path=input_image_path,
         description_prompt_path=run_dir / "description_prompt.txt",
         description_path=run_dir / "description.txt",
-        story_part_1_prompt_path=run_dir / "story_part_1_prompt.txt",
+        story_conversation_path=run_dir / "story_conversation.txt",
         story_part_1_path=run_dir / "story_part_1.txt",
-        story_part_2_prompt_path=run_dir / "story_part_2_prompt.txt",
         story_part_2_path=run_dir / "story_part_2.txt",
-        story_part_3_prompt_path=run_dir / "story_part_3_prompt.txt",
         story_part_3_path=run_dir / "story_part_3.txt",
     )

@@ -27,8 +27,8 @@ APP_CSS = """
     linear-gradient(180deg, #fbf4e7 0%, #efe6d7 100%);
 }
 
-#phase-one-shell {
-  max-width: 1240px;
+#story-shell {
+  max-width: 1180px;
   margin: 0 auto;
   padding-bottom: 32px;
 }
@@ -60,7 +60,7 @@ APP_CSS = """
 INTRO_HTML = f"""
 <div class="hero-card">
   <h1>Sequential Story Drafting Workbench</h1>
-  <p class="debug-copy">Phase 1 focuses only on clean text generation: one image description and three sequential story parts.</p>
+  <p class="debug-copy">This build turns one uploaded drawing into one grounded description and a three-part story written as a growing conversation.</p>
   <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
   <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
   <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
@@ -89,7 +89,6 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
     except Exception as exc:
         raise gr.Error(str(exc)) from exc
 
-    steps = result.draft.steps
     status = (
         f"Run `{result.run_id}` completed.\n\n"
         f"Artifacts saved to `{result.run_dir}`."
@@ -97,21 +96,18 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
     return (
         status,
         result.input_image_path,
-        result.description_text,
-        result.draft.full_conversation_text,
-        steps[0].prompt_text,
-        steps[0].output_text,
-        steps[1].prompt_text,
-        steps[1].output_text,
-        steps[2].prompt_text,
-        steps[2].output_text,
+        result.description.description_text,
+        result.full_conversation_text,
+        result.part_1_text,
+        result.part_2_text,
+        result.part_3_text,
         str(Path(result.run_dir).resolve()),
     )
 
 
 def build_demo() -> gr.Blocks:
     with gr.Blocks(css=APP_CSS, title="Sequential Story Drafting Workbench") as demo:
-        with gr.Column(elem_id="phase-one-shell"):
+        with gr.Column(elem_id="story-shell"):
             gr.HTML(INTRO_HTML)
 
             with gr.Row():
@@ -132,7 +128,7 @@ def build_demo() -> gr.Blocks:
                 preview_image = gr.Image(label="Uploaded image", interactive=False, type="filepath")
                 description_output = gr.Textbox(
                     label="Generated description",
-                    lines=4,
+                    lines=8,
                     interactive=False,
                 )
                 full_conversation_output = gr.Textbox(
@@ -143,20 +139,14 @@ def build_demo() -> gr.Blocks:
 
             with gr.Row():
                 with gr.Column(elem_classes=["surface-card"]):
-                    gr.Markdown("### Part 1 Input Slice", elem_classes=["debug-title"])
-                    part_1_prompt = gr.Textbox(lines=12, interactive=False)
-                    gr.Markdown("### Part 1 Output", elem_classes=["debug-title"])
-                    part_1_output = gr.Textbox(lines=6, interactive=False)
+                    gr.Markdown("### Story Part 1", elem_classes=["debug-title"])
+                    part_1_output = gr.Textbox(lines=8, interactive=False)
                 with gr.Column(elem_classes=["surface-card"]):
-                    gr.Markdown("### Part 2 Input Slice", elem_classes=["debug-title"])
-                    part_2_prompt = gr.Textbox(lines=12, interactive=False)
-                    gr.Markdown("### Part 2 Output", elem_classes=["debug-title"])
-                    part_2_output = gr.Textbox(lines=6, interactive=False)
+                    gr.Markdown("### Story Part 2", elem_classes=["debug-title"])
+                    part_2_output = gr.Textbox(lines=8, interactive=False)
                 with gr.Column(elem_classes=["surface-card"]):
-                    gr.Markdown("### Part 3 Input Slice", elem_classes=["debug-title"])
-                    part_3_prompt = gr.Textbox(lines=12, interactive=False)
-                    gr.Markdown("### Part 3 Output", elem_classes=["debug-title"])
-                    part_3_output = gr.Textbox(lines=6, interactive=False)
+                    gr.Markdown("### Story Part 3", elem_classes=["debug-title"])
+                    part_3_output = gr.Textbox(lines=8, interactive=False)
 
             create_button.click(
                 fn=generate_story,
@@ -166,11 +156,8 @@ def build_demo() -> gr.Blocks:
                     preview_image,
                     description_output,
                     full_conversation_output,
-                    part_1_prompt,
                     part_1_output,
-                    part_2_prompt,
                     part_2_output,
-                    part_3_prompt,
                     part_3_output,
                     run_dir_output,
                 ],

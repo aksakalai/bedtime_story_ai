@@ -8,16 +8,16 @@ from story_app.schemas import ValidationError
 
 
 VALID_DESCRIPTION = (
-    "A gentle drawing of a small house beside two trees and a little car under a calm evening sky."
+    "A gentle drawing of a small blue house with a red roof beside two green trees and a little blue car under a bright yellow sun."
 )
 VALID_PART_1 = (
-    "A little fox walked past the small house at dusk and noticed the two trees swaying softly nearby while a tiny car rested by the path. The evening felt warm and calm, and the fox slowed down to listen to the quiet sounds of home before night settled in."
+    "Mina stood beside the small blue house with the red roof and watched the bright yellow sun glow above the two green trees. A little blue car rested nearby, and the whole yard felt quiet and welcoming as she wondered what gentle adventure the day might bring."
 )
 VALID_PART_2 = (
-    "The fox followed the path between the trees and found a patch of glowing fireflies circling the house in patient loops. He watched them drift over the parked car and across the windows, and the whole place felt like a gentle secret waiting to be shared."
+    "A soft breeze shook the two green trees, and Mina noticed a folded paper tucked beneath the little blue car. She picked it up beside the blue house and found a kind note inviting her to follow the warm sunlight to a small surprise waiting in the garden."
 )
 VALID_PART_3 = (
-    "When the stars brightened, the fox curled beside the house and let the fireflies fade into the dark blue sky. The trees stood still, the little car gleamed softly, and the fox closed his eyes, happy to fall asleep in such a peaceful place."
+    "Mina followed the sunlight to the shady spot between the trees, where a basket of sweet berries waited beside the blue house. She smiled at the little blue car, thanked the bright yellow sun for guiding her, and ended the day feeling peaceful and glad."
 )
 
 
@@ -37,7 +37,7 @@ class FakeWriter:
         self.config = config
         self.calls = 0
 
-    def generate_part(self, prompt_text):
+    def generate_part(self, messages):
         self.calls += 1
         if self.calls == 1:
             return VALID_PART_1
@@ -49,31 +49,31 @@ class FakeWriter:
         return None
 
 
-class FailingDescription:
+class NonEosDescription:
     def __init__(self, config):
         self.config = config
 
     def describe(self, image_path, prompt_text):
-        return "```bad```"
+        raise ValidationError("Description generation did not finish naturally before the safety limit.")
 
     def unload(self):
         return None
 
 
-class CountingWriter:
+class NonEosWriter:
     instances = []
 
     def __init__(self, config):
         self.config = config
         self.calls = 0
-        CountingWriter.instances.append(self)
+        NonEosWriter.instances.append(self)
 
-    def generate_part(self, prompt_text):
+    def generate_part(self, messages):
         self.calls += 1
         if self.calls == 1:
             return VALID_PART_1
         if self.calls == 2:
-            return "Sure, here is the second part of the story."
+            raise ValidationError("Story generation did not finish naturally before the safety limit.")
         return VALID_PART_3
 
     def unload(self):
@@ -86,35 +86,31 @@ class PipelineTests(unittest.TestCase):
         path.write_bytes(b"fake-image")
         return path
 
-    def test_pipeline_stops_before_part_1_when_description_is_invalid(self):
-        class ShouldNotWrite:
-            def __init__(self, config):
-                raise AssertionError("writer should not be created")
-
+    def test_pipeline_stops_when_description_does_not_finish_with_eos(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=FailingDescription,
-                writer_factory=ShouldNotWrite,
+                describer_factory=NonEosDescription,
+                writer_factory=FakeWriter,
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
 
-    def test_pipeline_stops_before_part_3_when_part_2_is_invalid(self):
-        CountingWriter.instances = []
+    def test_pipeline_stops_before_part_3_when_part_2_does_not_finish_with_eos(self):
+        NonEosWriter.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
                 describer_factory=FakeDescriber,
-                writer_factory=CountingWriter,
+                writer_factory=NonEosWriter,
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
-            self.assertEqual(CountingWriter.instances[0].calls, 2)
+            self.assertEqual(NonEosWriter.instances[0].calls, 2)
 
-    def test_pipeline_smoke_path_saves_all_phase_1_artifacts(self):
+    def test_pipeline_smoke_path_saves_minimal_story_artifacts(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
@@ -124,23 +120,24 @@ class PipelineTests(unittest.TestCase):
             )
             result = pipeline.create_story_draft(self._create_input_file(root))
 
-            self.assertEqual(result.description_text, VALID_DESCRIPTION)
+            self.assertEqual(result.description.description_text, VALID_DESCRIPTION)
             self.assertEqual(result.part_1_text, VALID_PART_1)
             self.assertEqual(result.part_2_text, VALID_PART_2)
             self.assertEqual(result.part_3_text, VALID_PART_3)
-            self.assertIn("SYSTEM:", result.draft.full_conversation_text)
-            self.assertIn(VALID_PART_1, result.draft.full_conversation_text)
-            self.assertIn(VALID_PART_2, result.draft.full_conversation_text)
-            self.assertIn(VALID_PART_3, result.draft.full_conversation_text)
+            self.assertIn("SYSTEM:", result.full_conversation_text)
+            self.assertIn(VALID_PART_1, result.full_conversation_text)
+            self.assertIn(VALID_PART_2, result.full_conversation_text)
+            self.assertIn(VALID_PART_3, result.full_conversation_text)
+
+            input_images = list(result.run_dir.glob("input_image*"))
+            self.assertEqual(len(input_images), 1)
 
             expected_files = [
                 "description_prompt.txt",
                 "description.txt",
-                "story_part_1_prompt.txt",
+                "story_conversation.txt",
                 "story_part_1.txt",
-                "story_part_2_prompt.txt",
                 "story_part_2.txt",
-                "story_part_3_prompt.txt",
                 "story_part_3.txt",
             ]
             for filename in expected_files:

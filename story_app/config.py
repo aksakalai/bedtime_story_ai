@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-v12-20260315"
+APP_BUILD = "phase1-story-drafting-v1-20260315"
 
 
 @dataclass(frozen=True)
@@ -22,10 +22,10 @@ class GenerationConfig:
         "positions, facial expressions, clothing, background elements, and anything visually distinctive. Do not "
         "invent hidden actions, emotions, or story events."
     )
-    description_max_tokens: int = 320
+    description_max_tokens: int = 384
     story_part_max_tokens: int = 256
     min_description_words: int = 10
-    min_story_part_words: int = 20
+    min_story_part_words: int = 1
     random_seed: int = 42
     app_build: str = APP_BUILD
     models: ModelIds = field(default_factory=ModelIds)

@@ -2,12 +2,9 @@
 
 Phase 1 debug workbench for turning one uploaded drawing into:
 
-- one clean image description
-- story part 1
-- story part 2
-- story part 3
-
-This phase intentionally stops before image generation, narration, and video.
+- one grounded image description
+- one full story-writing conversation
+- three extracted story parts
 
 ## Run
 

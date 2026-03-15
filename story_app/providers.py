@@ -177,24 +177,11 @@ class QwenStoryWriter:
         except StopIteration:
             self.device = "cpu"
 
-    def generate_part(self, prompt_input) -> str:
+    def generate_part(self, messages: list[dict[str, Any]]) -> str:
         self._load()
         assert self.tokenizer is not None
         assert self.model is not None
 
-        if isinstance(prompt_input, str):
-            messages = [
-                {
-                    "role": "system",
-                    "content": "You write only clean bedtime-story prose. Follow the user's formatting and length instructions exactly.",
-                },
-                {
-                    "role": "user",
-                    "content": prompt_input,
-                },
-            ]
-        else:
-            messages = prompt_input
         rendered_prompt = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
@@ -204,6 +191,7 @@ class QwenStoryWriter:
         inputs = {key: value.to(self.device) for key, value in inputs.items()}
         prompt_token_count = int(inputs["input_ids"].shape[1])
         print(f"[story] Prompt token count: {prompt_token_count}")
+
         output_ids = self.model.generate(
             **inputs,
             max_new_tokens=self.config.story_part_max_tokens,

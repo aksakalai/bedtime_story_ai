@@ -9,14 +9,12 @@ from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
     build_description_prompt,
     build_story_messages,
-    build_story_part_prompt,
     format_story_messages,
-    normalize_text,
     validate_description_text,
     validate_story_part_text,
 )
 from .providers import Qwen2VLImageDescriber, QwenStoryWriter
-from .schemas import DescriptionResult, PipelineResult, StoryDraft, StoryStep
+from .schemas import DescriptionResult, PipelineResult, StoryDraft
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -58,7 +56,7 @@ class KidStoryPipeline:
         run_paths = prepare_run_paths(image_path, self.config.outputs_root)
         print(f"[pipeline] Run directory: {run_paths.run_dir}")
 
-        self._notify(progress_callback, 0.08, "Describing the drawing")
+        self._notify(progress_callback, 0.1, "Describing the drawing")
         description_prompt = build_description_prompt(self.config)
         write_text(run_paths.description_prompt_path, description_prompt)
 
@@ -68,6 +66,7 @@ class KidStoryPipeline:
             description_text = validate_description_text(raw_description, self.config)
         finally:
             describer.unload()
+
         write_text(run_paths.description_path, description_text)
         description = DescriptionResult(
             image_path=str(run_paths.input_image_path.resolve()),
@@ -76,85 +75,62 @@ class KidStoryPipeline:
         )
         print(f"[pipeline] Description: {description_text}")
 
-        self._notify(progress_callback, 0.22, "Generating the three story parts")
+        self._notify(progress_callback, 0.35, "Writing part 1")
         writer = self.writer_factory(self.config)
-        steps: list[StoryStep] = []
+        story_parts: list[str] = []
         try:
-            prompt_paths = {
-                "part_1": run_paths.story_part_1_prompt_path,
-                "part_2": run_paths.story_part_2_prompt_path,
-                "part_3": run_paths.story_part_3_prompt_path,
-            }
-            output_paths = {
-                "part_1": run_paths.story_part_1_path,
-                "part_2": run_paths.story_part_2_path,
-                "part_3": run_paths.story_part_3_path,
-            }
             for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
-                previous_parts = [step.output_text for step in steps]
-                prompt_text = build_story_part_prompt(
-                    description_text=description_text,
-                    step_name=step_name,
-                    previous_parts=previous_parts,
-                )
-                prompt_path = prompt_paths[step_name]
-                output_path = output_paths[step_name]
-                write_text(prompt_path, prompt_text)
-                print(f"[pipeline] {step_name} prompt saved: {prompt_path}")
-
                 messages = build_story_messages(
                     description_text=description_text,
-                    step_name=step_name,
-                    previous_parts=previous_parts,
+                    previous_parts=story_parts,
                 )
-                conversation_slice_text = format_story_messages(messages)
-                write_text(prompt_path, conversation_slice_text)
                 raw_output = writer.generate_part(messages)
                 output_text = validate_story_part_text(raw_output, self.config)
-                output_text = normalize_text(output_text)
-                write_text(output_path, output_text)
-                ends_cleanly = output_text.rstrip("\"')]} ").endswith((".", "!", "?"))
+                story_parts.append(output_text)
+                if step_name == "part_1":
+                    story_path = run_paths.story_part_1_path
+                elif step_name == "part_2":
+                    story_path = run_paths.story_part_2_path
+                else:
+                    story_path = run_paths.story_part_3_path
+                write_text(story_path, output_text)
                 print(
                     f"[pipeline] {step_name} stats: "
                     f"words={len(output_text.split())}, "
-                    f"chars={len(output_text)}, "
-                    f"ends_cleanly={ends_cleanly}"
+                    f"chars={len(output_text)}"
                 )
                 print(f"[pipeline] {step_name} output: {output_text}")
-                steps.append(
-                    StoryStep(
-                        step_name=step_name,
-                        prompt_text=conversation_slice_text,
-                        output_text=output_text,
-                    )
-                )
-                self._notify(progress_callback, 0.22 + (index * 0.22), f"Generated {step_name}")
+                self._notify(progress_callback, 0.35 + (index * 0.18), f"Generated {step_name}")
         finally:
             writer.unload()
 
         final_messages = build_story_messages(
             description_text=description_text,
-            step_name="part_3",
-            previous_parts=[step.output_text for step in steps[:2]],
+            previous_parts=story_parts[:2],
         )
         full_conversation_messages = [
             *final_messages,
-            {"role": "assistant", "content": steps[2].output_text},
+            {"role": "assistant", "content": story_parts[2]},
         ]
+        full_conversation_text = format_story_messages(full_conversation_messages)
+        write_text(run_paths.story_conversation_path, full_conversation_text)
+
         draft = StoryDraft(
-            description=description,
-            steps=steps,
-            full_conversation_text=format_story_messages(full_conversation_messages),
+            full_conversation_text=full_conversation_text,
+            part_1_text=story_parts[0],
+            part_2_text=story_parts[1],
+            part_3_text=story_parts[2],
         )
         result = PipelineResult(
             run_id=run_paths.run_id,
             run_dir=run_paths.run_dir.resolve(),
             input_image_path=str(run_paths.input_image_path.resolve()),
-            description_text=description_text,
-            part_1_text=steps[0].output_text,
-            part_2_text=steps[1].output_text,
-            part_3_text=steps[2].output_text,
+            description=description,
             draft=draft,
+            full_conversation_text=full_conversation_text,
+            part_1_text=story_parts[0],
+            part_2_text=story_parts[1],
+            part_3_text=story_parts[2],
         )
         self._notify(progress_callback, 1.0, "Story draft ready")
         print("[pipeline] Story drafting complete")
