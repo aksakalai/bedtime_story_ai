@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase1-story-drafting-v1-20260315"
+APP_BUILD = "phase1-story-drafting-v2-20260315"
 
 
 @dataclass(frozen=True)
@@ -17,10 +17,12 @@ class ModelIds:
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     description_prompt_prefix: str = (
-        "Describe this child's drawing in one clean paragraph using exact visible details only. Focus on uniquely "
-        "identifiable details that can later be reused in a story: main objects, characters if any, colors, counts, "
-        "positions, facial expressions, clothing, background elements, and anything visually distinctive. Do not "
-        "invent hidden actions, emotions, or story events."
+        "Describe this child's drawing as a plain visual scene in one clean paragraph. Report only directly visible "
+        "details. Focus on scenery and layout that a later story can reuse: main objects, characters if any, colors, "
+        "counts, relative positions, facial expressions, clothing, background elements, shapes, markings, and "
+        "anything visually distinctive. Prefer concrete spatial wording such as left, right, above, below, beside, "
+        "in front of, or behind when helpful. Do not add opinions, art critique, atmosphere labels, style "
+        "commentary, symbolism, hidden actions, emotions that are not visibly shown, or story events."
     )
     description_max_tokens: int = 384
     story_part_max_tokens: int = 256

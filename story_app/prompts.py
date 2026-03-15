@@ -7,18 +7,35 @@ from .config import GenerationConfig
 from .schemas import ValidationError
 
 STORY_SYSTEM_PROMPT = (
-    "You write only clean bedtime-story prose. Reply only with the story text. "
-    "Do not include explanations, labels, or meta commentary."
+    "You write only gentle bedtime-story prose grounded in the provided scene. Keep every part in the same setting "
+    "and close to the visible details. Build from the description and the earlier story instead of inventing "
+    "unrelated elements. Do not add major new characters, named companions, locations, props, backstory, or time "
+    "jumps unless they clearly grow out of the described scene. Reply only with the story text. Do not include "
+    "explanations, labels, or meta commentary."
 )
 
 PART_2_USER_PROMPT = (
-    "Write the second part of the same story. Continue directly from the story above. "
-    "Write only the story text."
+    "Write only part 2 of the same bedtime story.\n\n"
+    "Requirements:\n"
+    "- Continue directly from part 1 in the same setting and the same moment or an immediate continuation.\n"
+    "- Keep using the same visible objects, scenery, and mood already established.\n"
+    "- Build one gentle event, discovery, mystery, or small adventure from those existing details.\n"
+    "- Do not introduce major new characters, locations, props, or unrelated themes.\n"
+    "- Avoid sudden time jumps.\n"
+    "- Aim for roughly 45 to 65 words.\n"
+    "- Write only the story text."
 )
 
 PART_3_USER_PROMPT = (
-    "Write the third and final part of the same story. Continue directly from the story above "
-    "and end conclusively. Write only the story text."
+    "Write only part 3 of the same bedtime story.\n\n"
+    "Requirements:\n"
+    "- Continue directly from part 2 in the same setting and the same moment or an immediate continuation.\n"
+    "- Resolve the gentle event using the same scene and details already established.\n"
+    "- Do not introduce major new characters, locations, props, or unrelated themes.\n"
+    "- End with a calm, hopeful, bedtime-safe feeling.\n"
+    "- Avoid sudden time jumps.\n"
+    "- Aim for roughly 45 to 65 words.\n"
+    "- Write only the story text."
 )
 
 
@@ -35,20 +52,21 @@ def build_description_prompt(config: GenerationConfig) -> str:
 
 def build_story_part_1_prompt(description_text: str) -> str:
     return (
-        "The goal is to generate a three-part bedtime story based on the description of a child's drawing.\n\n"
-        "Below is the description of the image. Carefully observe the unique details, elements, objects, and scenery "
-        "that identify this picture, and fully use all of them in the story without missing details.\n\n"
+        "The goal is to write part 1 of a three-part bedtime story grounded in the scene described below.\n\n"
         f"Description of the image:\n{description_text}\n\n"
-        "Story requirements:\n"
-        "- The story has three parts.\n"
-        "- Part 1 introduces the main objects, scenery, unique details, tone, and characters.\n"
-        "- Part 2 builds an event, intrigue, mystery, or gentle adventure from the same scene.\n"
-        "- Part 3 concludes the story with a hopeful, optimistic, and positive ending.\n"
-        "- Use the unique objects, scenery, colors, and distinctive details from the description naturally in the story.\n"
+        "Requirements:\n"
+        "- Part 1 should feel like the opening scene of a story, not a caption or checklist.\n"
+        "- Stay tightly anchored to the exact setting and visible details from the description.\n"
+        "- Use the distinctive objects, colors, and spatial relationships naturally in the prose.\n"
+        "- Do not copy the description sentence by sentence.\n"
+        "- Do not introduce major new characters, locations, or props.\n"
+        "- If no character is clearly visible, you may use one gentle unnamed focal character or softly personify an existing visible element, but do not add a cast.\n"
+        "- End with a small point of curiosity that naturally leads into part 2.\n"
+        "- Keep the tone warm, calm, and bedtime-safe.\n"
+        "- Aim for roughly 45 to 65 words.\n"
         "- Reply only with the story itself.\n"
         "- Do not mention AI, prompts, instructions, or that this comes from a drawing.\n"
-        "- Aim for roughly 45 to 65 words per part, but finish cleanly.\n\n"
-        "Now write the first part of the story."
+        "\nNow write only part 1 of the story."
     )
 
 
