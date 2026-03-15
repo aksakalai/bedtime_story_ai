@@ -20,6 +20,7 @@ from .providers import (
     KokoroNarrationEngine,
     Qwen25VLMultimodalEngine,
     SSD1BTextToImageGenerator,
+    WhisperWordTimingEngine,
     clear_cached_models,
 )
 from .schemas import (
@@ -30,6 +31,7 @@ from .schemas import (
     StoryboardManifest,
     StoryboardManifestPart,
 )
+from .video import FFmpegVideoAssembler, align_story_text_to_timestamps, build_story_part_ass
 
 ProgressCallback = Callable[[float, str], None]
 
@@ -54,16 +56,22 @@ class KidStoryPipeline:
         writer_factory=Qwen25VLMultimodalEngine,
         image_generator_factory=SSD1BTextToImageGenerator,
         narrator_factory=KokoroNarrationEngine,
+        word_aligner_factory=WhisperWordTimingEngine,
+        video_assembler_factory=FFmpegVideoAssembler,
     ):
         self.config = config
         self.describer_factory = describer_factory
         self.writer_factory = writer_factory
         self.image_generator_factory = image_generator_factory
         self.narrator_factory = narrator_factory
+        self.word_aligner_factory = word_aligner_factory
+        self.video_assembler_factory = video_assembler_factory
         self._describer = None
         self._writer = None
         self._image_generator = None
         self._narrator = None
+        self._word_aligner = None
+        self._video_assembler = None
 
     def _notify(self, progress_callback: ProgressCallback | None, value: float, message: str) -> None:
         if progress_callback is not None:
@@ -93,17 +101,29 @@ class KidStoryPipeline:
             self._narrator = self.narrator_factory(self.config)
         return self._narrator
 
+    def _get_word_aligner(self):
+        if self._word_aligner is None:
+            self._word_aligner = self.word_aligner_factory(self.config)
+        return self._word_aligner
+
+    def _get_video_assembler(self):
+        if self._video_assembler is None:
+            self._video_assembler = self.video_assembler_factory(self.config)
+        return self._video_assembler
+
     def preload_models(self) -> None:
         self._get_describer()._load()
         self._get_writer()._load()
         self._get_image_generator()._load()
         self._get_narrator()._load()
+        self._get_word_aligner()._load()
 
     def clear_loaded_models(self) -> None:
         describer = self._describer
         writer = self._writer
         image_generator = self._image_generator
         narrator = self._narrator
+        word_aligner = self._word_aligner
         if describer is not None:
             try:
                 describer.unload(clear_cache=True)
@@ -124,10 +144,17 @@ class KidStoryPipeline:
                 narrator.unload(clear_cache=True)
             except TypeError:
                 narrator.unload()
+        if word_aligner is not None:
+            try:
+                word_aligner.unload(clear_cache=True)
+            except TypeError:
+                word_aligner.unload()
         self._describer = None
         self._writer = None
         self._image_generator = None
         self._narrator = None
+        self._word_aligner = None
+        self._video_assembler = None
         clear_cached_models()
 
     def _create_story_draft_internal(
@@ -238,6 +265,8 @@ class KidStoryPipeline:
         )
         image_generator = self._get_image_generator()
         narrator = self._get_narrator()
+        word_aligner = self._get_word_aligner()
+        video_assembler = self._get_video_assembler()
         self._notify(progress_callback, 0.9, "Generating storyboard images")
         story_parts = [
             draft_result.part_1_text,
@@ -259,11 +288,23 @@ class KidStoryPipeline:
             run_paths.story_part_2_audio_path,
             run_paths.story_part_3_audio_path,
         ]
+        subtitle_paths = [
+            run_paths.story_part_1_subtitle_path,
+            run_paths.story_part_2_subtitle_path,
+            run_paths.story_part_3_subtitle_path,
+        ]
+        clip_paths = [
+            run_paths.story_part_1_clip_path,
+            run_paths.story_part_2_clip_path,
+            run_paths.story_part_3_clip_path,
+        ]
         generated_prompt_paths: list[str] = []
         generated_image_paths: list[str] = []
         manifest_parts: list[StoryboardManifestPart] = []
         generated_audio_paths: list[str] = []
-        progress_points = [0.92, 0.95, 0.98]
+        generated_subtitle_paths: list[str] = []
+        generated_clip_paths: list[str] = []
+        progress_points = [0.92, 0.94, 0.96]
 
         for index, part_text in enumerate(story_parts, start=1):
             prompt_text = build_story_part_image_prompt(
@@ -299,8 +340,8 @@ class KidStoryPipeline:
                 f"Generated image for part {index}",
             )
 
-        self._notify(progress_callback, 0.985, "Generating narration")
-        narration_progress_points = [0.99, 0.995, 1.0]
+        self._notify(progress_callback, 0.965, "Generating narration")
+        narration_progress_points = [0.972, 0.978, 0.984]
         for index, part_text in enumerate(story_parts, start=1):
             audio_output_path, duration_seconds = narrator.narrate(
                 text=part_text,
@@ -323,14 +364,66 @@ class KidStoryPipeline:
                 f"Generated narration for part {index}",
             )
 
+        self._notify(progress_callback, 0.986, "Aligning narration and building overlays")
+        overlay_progress_points = [0.989, 0.993, 0.996]
+        for index, part_text in enumerate(story_parts, start=1):
+            resolved_audio_path = generated_audio_paths[index - 1]
+            whisper_words = word_aligner.transcribe_words(resolved_audio_path)
+            timed_tokens = align_story_text_to_timestamps(
+                display_text=part_text,
+                whisper_words=whisper_words,
+                fallback_total_duration=manifest_parts[index - 1].audio_duration_seconds or 0.0,
+            )
+            ass_text, panel_height = build_story_part_ass(
+                timed_tokens=timed_tokens,
+                total_duration_seconds=manifest_parts[index - 1].audio_duration_seconds or 0.0,
+                config=self.config,
+            )
+            subtitle_path = subtitle_paths[index - 1]
+            write_text(subtitle_path, ass_text)
+            generated_subtitle_paths.append(str(subtitle_path.resolve()))
+            clip_output_path = video_assembler.render_story_part_clip(
+                image_path=generated_image_paths[index - 1],
+                audio_path=resolved_audio_path,
+                subtitle_path=subtitle_path,
+                panel_height=panel_height,
+                total_duration_seconds=manifest_parts[index - 1].audio_duration_seconds or 0.0,
+                output_path=clip_paths[index - 1],
+            )
+            generated_clip_paths.append(str(clip_output_path.resolve()))
+            manifest_parts[index - 1] = StoryboardManifestPart(
+                index=manifest_parts[index - 1].index,
+                text=manifest_parts[index - 1].text,
+                image_prompt=manifest_parts[index - 1].image_prompt,
+                seed=manifest_parts[index - 1].seed,
+                image_path=manifest_parts[index - 1].image_path,
+                audio_path=manifest_parts[index - 1].audio_path,
+                audio_duration_seconds=manifest_parts[index - 1].audio_duration_seconds,
+                subtitle_path=str(subtitle_path.resolve()),
+                clip_path=str(clip_output_path.resolve()),
+            )
+            self._notify(
+                progress_callback,
+                overlay_progress_points[index - 1],
+                f"Rendered clip for part {index}",
+            )
+
+        self._notify(progress_callback, 0.998, "Combining final story video")
+        final_story_video_path = video_assembler.concatenate_story_clips(
+            clip_paths=generated_clip_paths,
+            output_path=run_paths.final_story_video_path,
+        )
+
         manifest = StoryboardManifest(
             run_id=draft_result.run_id,
             input_image_path=draft_result.input_image_path,
             description_text=draft_result.description.description_text,
             parts=manifest_parts,
+            final_story_video_path=str(final_story_video_path.resolve()),
         )
         write_json(run_paths.storyboard_manifest_path, manifest.to_dict())
         print("[pipeline] Storyboard package complete")
+        self._notify(progress_callback, 1.0, "Final story video ready")
 
         return replace(
             draft_result,
@@ -343,5 +436,12 @@ class KidStoryPipeline:
             story_part_1_audio_path=generated_audio_paths[0],
             story_part_2_audio_path=generated_audio_paths[1],
             story_part_3_audio_path=generated_audio_paths[2],
+            story_part_1_subtitle_path=generated_subtitle_paths[0],
+            story_part_2_subtitle_path=generated_subtitle_paths[1],
+            story_part_3_subtitle_path=generated_subtitle_paths[2],
+            story_part_1_clip_path=generated_clip_paths[0],
+            story_part_2_clip_path=generated_clip_paths[1],
+            story_part_3_clip_path=generated_clip_paths[2],
+            final_story_video_path=str(final_story_video_path.resolve()),
             storyboard_manifest_path=str(run_paths.storyboard_manifest_path.resolve()),
         )

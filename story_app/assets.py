@@ -53,5 +53,12 @@ def prepare_run_paths(source_image_path: str | Path, outputs_root: Path) -> RunP
         story_part_1_audio_path=run_dir / "story_part_1_audio.wav",
         story_part_2_audio_path=run_dir / "story_part_2_audio.wav",
         story_part_3_audio_path=run_dir / "story_part_3_audio.wav",
+        story_part_1_subtitle_path=run_dir / "story_part_1.ass",
+        story_part_2_subtitle_path=run_dir / "story_part_2.ass",
+        story_part_3_subtitle_path=run_dir / "story_part_3.ass",
+        story_part_1_clip_path=run_dir / "story_part_1_clip.mp4",
+        story_part_2_clip_path=run_dir / "story_part_2_clip.mp4",
+        story_part_3_clip_path=run_dir / "story_part_3_clip.mp4",
+        final_story_video_path=run_dir / "final_story_video.mp4",
         storyboard_manifest_path=run_dir / "storyboard_manifest.json",
     )

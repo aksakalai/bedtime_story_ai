@@ -419,3 +419,65 @@ class KokoroNarrationEngine:
         if clear_cache:
             _get_model_cache().pop(self._cache_key(), None)
         self.pipeline = None
+
+
+class WhisperWordTimingEngine:
+    def __init__(self, config: GenerationConfig):
+        self.config = config
+        self.model: Any | None = None
+
+    def _resolve_model_id(self) -> str:
+        return self.config.models.word_aligner
+
+    def _cache_key(self) -> tuple[str, str, str]:
+        return ("word_aligner", self._resolve_model_id(), "cpu")
+
+    def _load(self) -> None:
+        if self.model is not None:
+            return
+
+        cache_key = self._cache_key()
+        cached = _get_model_cache().get(cache_key)
+        if cached is not None:
+            print(f"[timing] Reusing cached model: {self._resolve_model_id()}")
+            self.model = cached["model"]
+            return
+
+        import whisper
+
+        print(f"[timing] Loading model: {self._resolve_model_id()} on cpu")
+        self.model = whisper.load_model(self._resolve_model_id(), device="cpu")
+        _get_model_cache()[cache_key] = {"model": self.model}
+
+    def transcribe_words(self, audio_path: str | Path) -> list[dict[str, float | str]]:
+        self._load()
+        assert self.model is not None
+
+        result = self.model.transcribe(
+            str(Path(audio_path).resolve()),
+            language="en",
+            task="transcribe",
+            word_timestamps=True,
+            verbose=False,
+            fp16=False,
+            condition_on_previous_text=False,
+            temperature=0.0,
+        )
+        words: list[dict[str, float | str]] = []
+        for segment in result.get("segments", []):
+            for word in segment.get("words", []):
+                words.append(
+                    {
+                        "word": str(word.get("word", "")).strip(),
+                        "start": float(word.get("start", 0.0) or 0.0),
+                        "end": float(word.get("end", 0.0) or 0.0),
+                    }
+                )
+        if not words:
+            raise ValidationError("Whisper word alignment produced no words.")
+        return words
+
+    def unload(self, clear_cache: bool = False) -> None:
+        if clear_cache:
+            _get_model_cache().pop(self._cache_key(), None)
+        self.model = None

@@ -75,12 +75,13 @@ APP_CSS = """
 INTRO_HTML = f"""
 <div class="hero-card">
   <h1>Resident Storyboard Workbench</h1>
-  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, three separate text-to-image storyboard illustrations, and one narration track for each story part.</p>
+  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, three separate text-to-image storyboard illustrations, three narration tracks, and one final highlighted story video.</p>
   <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
   <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
   <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
   <p class="debug-copy"><strong>Part image model:</strong> {DEFAULT_CONFIG.models.part_image_generator}</p>
   <p class="debug-copy"><strong>Narration model:</strong> {DEFAULT_CONFIG.models.part_narrator}</p>
+  <p class="debug-copy"><strong>Word timing model:</strong> {DEFAULT_CONFIG.models.word_aligner}</p>
 </div>
 """
 
@@ -131,6 +132,7 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         result.part_3_text,
         _load_image_for_ui(result.story_part_3_image_path),
         result.story_part_3_audio_path,
+        result.final_story_video_path,
         str(Path(result.run_dir).resolve()),
     )
 
@@ -174,6 +176,10 @@ def build_demo() -> gr.Blocks:
                 full_conversation_output = gr.Textbox(
                     label="Full story conversation",
                     lines=18,
+                    interactive=False,
+                )
+                final_video_output = gr.Video(
+                    label="Final story video",
                     interactive=False,
                 )
 
@@ -235,6 +241,7 @@ def build_demo() -> gr.Blocks:
                     part_3_output,
                     part_3_image_output,
                     part_3_audio_output,
+                    final_video_output,
                     run_dir_output,
                 ],
             )

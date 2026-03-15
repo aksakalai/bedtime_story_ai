@@ -44,6 +44,13 @@ class RunPaths:
     story_part_1_audio_path: Path
     story_part_2_audio_path: Path
     story_part_3_audio_path: Path
+    story_part_1_subtitle_path: Path
+    story_part_2_subtitle_path: Path
+    story_part_3_subtitle_path: Path
+    story_part_1_clip_path: Path
+    story_part_2_clip_path: Path
+    story_part_3_clip_path: Path
+    final_story_video_path: Path
     storyboard_manifest_path: Path
 
 
@@ -67,6 +74,13 @@ class PipelineResult:
     story_part_1_audio_path: str | None = None
     story_part_2_audio_path: str | None = None
     story_part_3_audio_path: str | None = None
+    story_part_1_subtitle_path: str | None = None
+    story_part_2_subtitle_path: str | None = None
+    story_part_3_subtitle_path: str | None = None
+    story_part_1_clip_path: str | None = None
+    story_part_2_clip_path: str | None = None
+    story_part_3_clip_path: str | None = None
+    final_story_video_path: str | None = None
     storyboard_manifest_path: str | None = None
 
 
@@ -79,6 +93,8 @@ class StoryboardManifestPart:
     image_path: str
     audio_path: str | None = None
     audio_duration_seconds: float | None = None
+    subtitle_path: str | None = None
+    clip_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,12 +103,14 @@ class StoryboardManifest:
     input_image_path: str
     description_text: str
     parts: list[StoryboardManifestPart]
+    final_story_video_path: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
             "input_image_path": self.input_image_path,
             "description_text": self.description_text,
+            "final_story_video_path": self.final_story_video_path,
             "parts": [
                 {
                     "index": part.index,
@@ -102,6 +120,8 @@ class StoryboardManifest:
                     "image_path": part.image_path,
                     "audio_path": part.audio_path,
                     "audio_duration_seconds": part.audio_duration_seconds,
+                    "subtitle_path": part.subtitle_path,
+                    "clip_path": part.clip_path,
                 }
                 for part in self.parts
             ],

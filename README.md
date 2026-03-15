@@ -7,14 +7,15 @@ Resident storyboard workbench for turning one uploaded drawing into:
 - three extracted story parts
 - three generated storyboard images
 - three generated narration tracks
+- one final highlighted story video
 
 ## Current Scope
 
-This repository is intentionally a Phase 2A baseline, not the full end-state product.
+This repository is intentionally a Phase 2B baseline, not the full end-state product.
 
 Current implemented flow:
 
-`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part text-to-image generation -> per-part narration generation -> artifact files under outputs/run_* -> Gradio debug UI`
+`uploaded image -> grounded description -> sequential story part 1/2/3 generation -> per-part text-to-image generation -> per-part narration generation -> word-timed text overlay clip rendering -> final story video -> artifact files under outputs/run_* -> Gradio debug UI`
 
 Current architecture:
 
@@ -50,14 +51,21 @@ Stable artifact contract per run:
 - `story_part_1_audio.wav`
 - `story_part_2_audio.wav`
 - `story_part_3_audio.wav`
+- `story_part_1.ass`
+- `story_part_2.ass`
+- `story_part_3.ass`
+- `story_part_1_clip.mp4`
+- `story_part_2_clip.mp4`
+- `story_part_3_clip.mp4`
+- `final_story_video.mp4`
 - `storyboard_manifest.json`
 
 ## Not Yet Implemented
 
 The following stages are intentionally out of scope for this baseline:
 
-- word-level timing and highlighting
-- video assembly or export
+- richer transitions and motion design
+- word-level highlighting polish beyond the current karaoke-style implementation
 
 ## Run
 
@@ -70,6 +78,12 @@ For Kokoro narration in Colab, install the system phonemizer dependency once per
 
 ```bash
 apt-get -qq -y install espeak-ng
+```
+
+If your runtime does not already include ffmpeg, install it once per fresh runtime:
+
+```bash
+apt-get -qq -y install ffmpeg
 ```
 
 ## Colab Entry Surface
@@ -85,6 +99,7 @@ print("Description model:", story_app.config.DEFAULT_CONFIG.models.image_describ
 print("Story model:", story_app.config.DEFAULT_CONFIG.models.story_writer)
 print("Part image model:", story_app.config.DEFAULT_CONFIG.models.part_image_generator)
 print("Narration model:", story_app.config.DEFAULT_CONFIG.models.part_narrator)
+print("Word timing model:", story_app.config.DEFAULT_CONFIG.models.word_aligner)
 
 demo = story_app.app.build_demo()
 demo.launch(debug=True, share=True, inline=True)
@@ -96,3 +111,4 @@ demo.launch(debug=True, share=True, inline=True)
 - Story drafting: `Qwen/Qwen2.5-VL-3B-Instruct`
 - Storyboard images: `segmind/SSD-1B`
 - Narration: `hexgrad/Kokoro-82M`
+- Word timing: `tiny.en` via OpenAI Whisper
