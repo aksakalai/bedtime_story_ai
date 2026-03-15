@@ -43,10 +43,10 @@ def _tokenize_display_text(text: str) -> list[str]:
 
 def _resolve_story_font(config: GenerationConfig) -> tuple[str, str | None]:
     candidates = [
-        (config.overlay_font_name, "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"),
-        ("Liberation Serif", "/usr/share/fonts/truetype/liberation2/LiberationSerif-Regular.ttf"),
-        ("Georgia", "C:\\Windows\\Fonts\\georgia.ttf"),
-        ("Times New Roman", "C:\\Windows\\Fonts\\times.ttf"),
+        (config.overlay_font_name, "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        ("Liberation Sans", "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"),
+        ("Arial", "C:\\Windows\\Fonts\\arial.ttf"),
+        ("Segoe UI", "C:\\Windows\\Fonts\\segoeui.ttf"),
     ]
     for font_name, font_path in candidates:
         if Path(font_path).exists():

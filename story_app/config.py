@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-final-video-v14-20260316"
+APP_BUILD = "phase2-final-video-ui-v15-20260316"
 
 
 @dataclass(frozen=True)
@@ -49,17 +49,17 @@ class GenerationConfig:
     video_height: int = 1024
     video_fps: int = 24
     video_tail_padding_seconds: float = 0.25
-    overlay_text_width_ratio: float = 0.84
-    overlay_min_panel_height_ratio: float = 0.20
-    overlay_max_panel_height_ratio: float = 0.40
-    overlay_horizontal_padding_ratio: float = 0.08
-    overlay_vertical_padding_ratio: float = 0.04
-    overlay_min_font_size: int = 28
-    overlay_max_font_size: int = 58
-    overlay_line_spacing_ratio: float = 0.28
-    overlay_font_name: str = "DejaVu Serif"
-    overlay_panel_color_hex: str = "1A1620"
-    overlay_panel_opacity: float = 0.52
+    overlay_text_width_ratio: float = 0.78
+    overlay_min_panel_height_ratio: float = 0.24
+    overlay_max_panel_height_ratio: float = 0.30
+    overlay_horizontal_padding_ratio: float = 0.11
+    overlay_vertical_padding_ratio: float = 0.035
+    overlay_min_font_size: int = 20
+    overlay_max_font_size: int = 42
+    overlay_line_spacing_ratio: float = 0.22
+    overlay_font_name: str = "DejaVu Sans"
+    overlay_panel_color_hex: str = "101722"
+    overlay_panel_opacity: float = 0.78
     min_description_words: int = 10
     min_story_part_words: int = 1
     random_seed: int = 42

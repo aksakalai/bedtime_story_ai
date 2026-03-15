@@ -62,6 +62,10 @@ APP_CSS = """
   margin-top: 18px;
 }
 
+.story-part-stack {
+  margin-top: 18px;
+}
+
 .story-part-image {
   min-height: 520px;
 }
@@ -69,6 +73,11 @@ APP_CSS = """
 .story-part-image img {
   object-fit: contain;
   background: rgba(255, 248, 238, 0.9);
+}
+
+.final-video-card {
+  margin-top: 24px;
+  padding: 22px;
 }
 """
 
@@ -178,12 +187,8 @@ def build_demo() -> gr.Blocks:
                     lines=18,
                     interactive=False,
                 )
-                final_video_output = gr.Video(
-                    label="Final story video",
-                    interactive=False,
-                )
 
-            with gr.Column():
+            with gr.Column(elem_classes=["story-part-stack"]):
                 with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 1", elem_classes=["debug-title"])
                     part_1_output = gr.Textbox(lines=7, interactive=False)
@@ -223,6 +228,12 @@ def build_demo() -> gr.Blocks:
                         label="Part 3 narration",
                         interactive=False,
                     )
+
+            with gr.Column(elem_classes=["surface-card", "final-video-card"]):
+                gr.Markdown("### Final Story Video", elem_classes=["debug-title"])
+                final_video_output = gr.Video(
+                    interactive=False,
+                )
 
             create_button.click(
                 fn=generate_story,
