@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-final-video-ui-v15-20260316"
+APP_BUILD = "phase2-final-video-warmup-v16-20260316"
 
 
 @dataclass(frozen=True)
@@ -50,16 +50,23 @@ class GenerationConfig:
     video_fps: int = 24
     video_tail_padding_seconds: float = 0.25
     overlay_text_width_ratio: float = 0.78
-    overlay_min_panel_height_ratio: float = 0.24
-    overlay_max_panel_height_ratio: float = 0.30
-    overlay_horizontal_padding_ratio: float = 0.11
-    overlay_vertical_padding_ratio: float = 0.035
-    overlay_min_font_size: int = 20
-    overlay_max_font_size: int = 42
-    overlay_line_spacing_ratio: float = 0.22
+    overlay_box_width_ratio: float = 0.88
+    overlay_box_bottom_margin_ratio: float = 0.032
+    overlay_min_panel_height_ratio: float = 0.22
+    overlay_max_panel_height_ratio: float = 0.34
+    overlay_horizontal_padding_ratio: float = 0.045
+    overlay_vertical_padding_ratio: float = 0.024
+    overlay_min_font_size: int = 18
+    overlay_max_font_size: int = 34
+    overlay_line_spacing_ratio: float = 0.16
     overlay_font_name: str = "DejaVu Sans"
-    overlay_panel_color_hex: str = "101722"
-    overlay_panel_opacity: float = 0.78
+    overlay_panel_color_hex: str = "16202D"
+    overlay_panel_opacity: float = 0.84
+    overlay_panel_border_color_hex: str = "E6D2A8"
+    overlay_panel_border_opacity: float = 0.36
+    overlay_panel_border_thickness: int = 2
+    overlay_panel_shadow_opacity: float = 0.18
+    overlay_panel_shadow_offset: int = 8
     min_description_words: int = 10
     min_story_part_words: int = 1
     random_seed: int = 42

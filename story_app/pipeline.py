@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import random
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
+
+from PIL import Image
 
 from .assets import prepare_run_paths, write_json, write_text
 from .config import DEFAULT_CONFIG, GenerationConfig
@@ -72,6 +75,7 @@ class KidStoryPipeline:
         self._narrator = None
         self._word_aligner = None
         self._video_assembler = None
+        self._runtime_is_warm = False
 
     def _notify(self, progress_callback: ProgressCallback | None, value: float, message: str) -> None:
         if progress_callback is not None:
@@ -118,6 +122,91 @@ class KidStoryPipeline:
         self._get_narrator()._load()
         self._get_word_aligner()._load()
 
+    def warm_up_runtime(self) -> None:
+        if self._runtime_is_warm:
+            print("[warmup] Runtime already warmed up")
+            return
+
+        print("[warmup] Starting hidden runtime warm-up")
+        self.preload_models()
+        describer = self._get_describer()
+        writer = self._get_writer()
+        image_generator = self._get_image_generator()
+        narrator = self._get_narrator()
+        word_aligner = self._get_word_aligner()
+        video_assembler = self._get_video_assembler()
+
+        warm_description = "A small blue house rests under a bright moon beside two quiet trees."
+        warm_story_text = (
+            "A little blue house glows softly under the stars while the trees sway and the night feels calm and safe."
+        )
+
+        with tempfile.TemporaryDirectory(prefix="bedtime_story_ai_warmup_") as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            warm_image_path = temp_dir / "warmup_input.png"
+            warm_generated_image_path = temp_dir / "warmup_story_image.png"
+            warm_audio_path = temp_dir / "warmup_audio.wav"
+            warm_subtitle_path = temp_dir / "warmup_subtitles.ass"
+            warm_clip_path = temp_dir / "warmup_clip.mp4"
+            warm_final_video_path = temp_dir / "warmup_final.mp4"
+
+            Image.new(
+                "RGB",
+                (self.config.video_width, self.config.video_height),
+                color=(245, 241, 231),
+            ).save(warm_image_path)
+
+            description_messages = build_description_messages(build_description_prompt(self.config))
+            describer.describe(warm_image_path, description_messages)
+            warm_story_messages = build_story_messages(
+                description_text=warm_description,
+                previous_parts=[],
+            )
+            writer.generate_part(warm_image_path, warm_story_messages)
+
+            prompt_text = build_story_part_image_prompt(
+                self.config,
+                description_text=warm_description,
+                part_text=warm_story_text,
+            )
+            image_generator.generate(
+                prompt_text=prompt_text,
+                negative_prompt_text=self.config.image_negative_prompt,
+                seed=self.config.random_seed,
+                output_path=warm_generated_image_path,
+            )
+            audio_output_path, duration_seconds = narrator.narrate(
+                text=warm_story_text,
+                output_path=warm_audio_path,
+            )
+            whisper_words = word_aligner.transcribe_words(audio_output_path)
+            timed_tokens = align_story_text_to_timestamps(
+                display_text=warm_story_text,
+                whisper_words=whisper_words,
+                fallback_total_duration=duration_seconds,
+            )
+            ass_text, overlay_layout = build_story_part_ass(
+                timed_tokens=timed_tokens,
+                total_duration_seconds=duration_seconds,
+                config=self.config,
+            )
+            write_text(warm_subtitle_path, ass_text)
+            clip_output_path = video_assembler.render_story_part_clip(
+                image_path=warm_generated_image_path,
+                audio_path=audio_output_path,
+                subtitle_path=warm_subtitle_path,
+                overlay_layout=overlay_layout,
+                total_duration_seconds=duration_seconds,
+                output_path=warm_clip_path,
+            )
+            video_assembler.concatenate_story_clips(
+                clip_paths=[clip_output_path],
+                output_path=warm_final_video_path,
+            )
+
+        self._runtime_is_warm = True
+        print("[warmup] Runtime warm-up complete")
+
     def clear_loaded_models(self) -> None:
         describer = self._describer
         writer = self._writer
@@ -155,6 +244,7 @@ class KidStoryPipeline:
         self._narrator = None
         self._word_aligner = None
         self._video_assembler = None
+        self._runtime_is_warm = False
         clear_cached_models()
 
     def _create_story_draft_internal(
@@ -374,7 +464,7 @@ class KidStoryPipeline:
                 whisper_words=whisper_words,
                 fallback_total_duration=manifest_parts[index - 1].audio_duration_seconds or 0.0,
             )
-            ass_text, panel_height = build_story_part_ass(
+            ass_text, overlay_layout = build_story_part_ass(
                 timed_tokens=timed_tokens,
                 total_duration_seconds=manifest_parts[index - 1].audio_duration_seconds or 0.0,
                 config=self.config,
@@ -386,7 +476,7 @@ class KidStoryPipeline:
                 image_path=generated_image_paths[index - 1],
                 audio_path=resolved_audio_path,
                 subtitle_path=subtitle_path,
-                panel_height=panel_height,
+                overlay_layout=overlay_layout,
                 total_duration_seconds=manifest_parts[index - 1].audio_duration_seconds or 0.0,
                 output_path=clip_paths[index - 1],
             )

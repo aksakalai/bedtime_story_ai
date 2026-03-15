@@ -148,7 +148,8 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
 
 def preload_models() -> str:
     _PIPELINE.preload_models()
-    return "Models are loaded and ready in the current Python session."
+    _PIPELINE.warm_up_runtime()
+    return "Models are loaded, warmed up, and ready in the current Python session."
 
 
 def clear_loaded_models() -> str:
@@ -261,5 +262,6 @@ def build_demo() -> gr.Blocks:
 
 
 def main() -> None:
+    print(preload_models())
     demo = build_demo()
     demo.launch(debug=True, share=True, inline=True)

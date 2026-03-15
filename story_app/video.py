@@ -26,6 +26,9 @@ class OverlayLayout:
     font_name: str
     font_size: int
     panel_height: int
+    box_left: int
+    box_width: int
+    box_bottom_margin: int
     margin_l: int
     margin_r: int
     margin_v: int
@@ -89,9 +92,17 @@ def _wrap_tokens(
 
 def fit_overlay_layout(tokens: list[TimedToken], config: GenerationConfig) -> OverlayLayout:
     font_name, font_path = _resolve_story_font(config)
-    max_width = int(config.video_width * config.overlay_text_width_ratio)
-    margin_h = int(config.video_width * config.overlay_horizontal_padding_ratio)
+    box_width = int(config.video_width * config.overlay_box_width_ratio)
+    box_left = max(0, (config.video_width - box_width) // 2)
+    box_bottom_margin = int(config.video_height * config.overlay_box_bottom_margin_ratio)
+    padding_h = int(box_width * config.overlay_horizontal_padding_ratio)
     padding_v = int(config.video_height * config.overlay_vertical_padding_ratio)
+    max_width = max(
+        int(config.video_width * config.overlay_text_width_ratio),
+        box_width - (padding_h * 2),
+    )
+    max_width = min(max_width, box_width - (padding_h * 2))
+    margin_r = max(0, config.video_width - (box_left + box_width) + padding_h)
     min_panel_height = int(config.video_height * config.overlay_min_panel_height_ratio)
     max_panel_height = int(config.video_height * config.overlay_max_panel_height_ratio)
     best_layout: OverlayLayout | None = None
@@ -99,9 +110,8 @@ def fit_overlay_layout(tokens: list[TimedToken], config: GenerationConfig) -> Ov
     for font_size in range(config.overlay_max_font_size, config.overlay_min_font_size - 1, -2):
         font = _load_font(font_path, font_size)
         lines = _wrap_tokens(tokens, font=font, max_width=max_width)
-        _, sample_height = _measure_text(font, "Ag")
-        line_height = max(sample_height, font_size)
-        line_spacing = int(line_height * config.overlay_line_spacing_ratio)
+        line_height = math.ceil(font_size * 1.42)
+        line_spacing = max(2, math.ceil(font_size * config.overlay_line_spacing_ratio))
         text_height = (len(lines) * line_height) + (max(0, len(lines) - 1) * line_spacing)
         panel_height = max(min_panel_height, text_height + (padding_v * 2))
         if panel_height > max_panel_height:
@@ -110,9 +120,12 @@ def fit_overlay_layout(tokens: list[TimedToken], config: GenerationConfig) -> Ov
             font_name=font_name,
             font_size=font_size,
             panel_height=panel_height,
-            margin_l=margin_h,
-            margin_r=margin_h,
-            margin_v=padding_v,
+            box_left=box_left,
+            box_width=box_width,
+            box_bottom_margin=box_bottom_margin,
+            margin_l=box_left + padding_h,
+            margin_r=margin_r,
+            margin_v=box_bottom_margin + padding_v,
             line_height=line_height,
             lines=lines,
         )
@@ -123,16 +136,18 @@ def fit_overlay_layout(tokens: list[TimedToken], config: GenerationConfig) -> Ov
 
     font = _load_font(font_path, config.overlay_min_font_size)
     lines = _wrap_tokens(tokens, font=font, max_width=max_width)
-    _, sample_height = _measure_text(font, "Ag")
-    line_height = max(sample_height, config.overlay_min_font_size)
+    line_height = math.ceil(config.overlay_min_font_size * 1.42)
     panel_height = max_panel_height
     return OverlayLayout(
         font_name=font_name,
         font_size=config.overlay_min_font_size,
         panel_height=panel_height,
-        margin_l=margin_h,
-        margin_r=margin_h,
-        margin_v=padding_v,
+        box_left=box_left,
+        box_width=box_width,
+        box_bottom_margin=box_bottom_margin,
+        margin_l=box_left + padding_h,
+        margin_r=margin_r,
+        margin_v=box_bottom_margin + padding_v,
         line_height=line_height,
         lines=lines,
     )
@@ -223,11 +238,11 @@ def build_story_part_ass(
     timed_tokens: list[TimedToken],
     total_duration_seconds: float,
     config: GenerationConfig,
-) -> tuple[str, int]:
+) -> tuple[str, OverlayLayout]:
     layout = fit_overlay_layout(timed_tokens, config)
-    primary_color = _ass_color_from_rgb_hex("F4C46A")
-    secondary_color = _ass_color_from_rgb_hex("FFF7EA")
-    outline_color = _ass_color_from_rgb_hex("1A0F0A")
+    primary_color = _ass_color_from_rgb_hex("E7C675")
+    secondary_color = _ass_color_from_rgb_hex("FFF9EF")
+    outline_color = _ass_color_from_rgb_hex("111925")
     back_color = _ass_color_from_rgb_hex("000000")
     lines: list[str] = [
         "[Script Info]",
@@ -241,7 +256,7 @@ def build_story_part_ass(
         "Alignment, MarginL, MarginR, MarginV, Encoding",
         "Style: Story,"
         f"{layout.font_name},{layout.font_size},{primary_color},{secondary_color},{outline_color},{back_color},"
-        "0,0,0,0,100,100,0,0,1,2.6,0.8,2,"
+        "0,0,0,0,100,100,0,0,1,1.6,0.2,2,"
         f"{layout.margin_l},{layout.margin_r},{layout.margin_v},1",
         "",
         "[Events]",
@@ -269,7 +284,7 @@ def build_story_part_ass(
         "Dialogue: 0,"
         f"{_format_ass_time(0.0)},{_format_ass_time(event_end)},Story,,0,0,0,,{dialogue_text}"
     )
-    return "\n".join(lines) + "\n", layout.panel_height
+    return "\n".join(lines) + "\n", layout
 
 
 def _escape_subtitles_path(path: str | Path) -> str:
@@ -311,18 +326,26 @@ class FFmpegVideoAssembler:
         image_path: str | Path,
         audio_path: str | Path,
         subtitle_path: str | Path,
-        panel_height: int,
+        overlay_layout: OverlayLayout,
         total_duration_seconds: float,
         output_path: str | Path,
     ) -> Path:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        panel_top = self.config.video_height - panel_height
+        panel_top = self.config.video_height - overlay_layout.box_bottom_margin - overlay_layout.panel_height
+        shadow_offset = self.config.overlay_panel_shadow_offset
+        shadow_left = max(0, overlay_layout.box_left + shadow_offset)
+        shadow_top = max(0, panel_top + shadow_offset)
         filter_graph = (
             f"scale={self.config.video_width}:{self.config.video_height}:force_original_aspect_ratio=increase,"
             f"crop={self.config.video_width}:{self.config.video_height},"
-            f"drawbox=x=0:y={panel_top}:w=iw:h={panel_height}:"
+            f"drawbox=x={shadow_left}:y={shadow_top}:w={overlay_layout.box_width}:h={overlay_layout.panel_height}:"
+            f"color=0x000000@{self.config.overlay_panel_shadow_opacity}:t=fill,"
+            f"drawbox=x={overlay_layout.box_left}:y={panel_top}:w={overlay_layout.box_width}:h={overlay_layout.panel_height}:"
             f"color=0x{self.config.overlay_panel_color_hex}@{self.config.overlay_panel_opacity}:t=fill,"
+            f"drawbox=x={overlay_layout.box_left}:y={panel_top}:w={overlay_layout.box_width}:h={overlay_layout.panel_height}:"
+            f"color=0x{self.config.overlay_panel_border_color_hex}@{self.config.overlay_panel_border_opacity}:"
+            f"t={self.config.overlay_panel_border_thickness},"
             f"subtitles='{_escape_subtitles_path(subtitle_path)}'"
         )
         clip_duration = total_duration_seconds + self.config.video_tail_padding_seconds
