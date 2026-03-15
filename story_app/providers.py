@@ -246,11 +246,13 @@ Qwen2VLImageDescriber = Qwen25VLMultimodalEngine
 QwenStoryWriter = Qwen25VLMultimodalEngine
 
 
-class SSD1BTextToImageGenerator:
+class PixArtSigmaTextToImageGenerator:
     def __init__(self, config: GenerationConfig):
         self.config = config
         self.device = "cpu"
-        self.pipeline: Any | None = None
+        self.prompt_encoder_pipeline: Any | None = None
+        self.generation_pipeline: Any | None = None
+        self.uses_split_pipeline = False
 
     def _resolve_model_id(self) -> str:
         return self.config.models.part_image_generator
@@ -259,44 +261,83 @@ class SSD1BTextToImageGenerator:
         return ("image_generator", self._resolve_model_id(), self.device)
 
     def _load(self) -> None:
-        if self.pipeline is not None:
+        if self.generation_pipeline is not None:
             return
 
         import torch
-        from diffusers import AutoPipelineForText2Image
+        from diffusers import PixArtSigmaPipeline
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         cache_key = self._cache_key()
         cached = _get_model_cache().get(cache_key)
         if cached is not None:
             print(f"[image] Reusing cached model: {self._resolve_model_id()} on {self.device}")
-            self.pipeline = cached["pipeline"]
+            self.prompt_encoder_pipeline = cached["prompt_encoder_pipeline"]
+            self.generation_pipeline = cached["generation_pipeline"]
+            self.uses_split_pipeline = bool(cached.get("uses_split_pipeline", False))
             return
 
         print(f"[image] Loading model: {self._resolve_model_id()} on {self.device}")
         if self.device == "cuda":
-            self.pipeline = AutoPipelineForText2Image.from_pretrained(
-                self._resolve_model_id(),
-                torch_dtype=torch.float16,
-                variant="fp16",
-                use_safetensors=True,
-            )
-        else:
-            self.pipeline = AutoPipelineForText2Image.from_pretrained(
-                self._resolve_model_id(),
-                use_safetensors=True,
-            )
+            try:
+                from transformers import T5EncoderModel
 
-        self.pipeline.to(self.device)
-        if hasattr(self.pipeline, "set_progress_bar_config"):
-            self.pipeline.set_progress_bar_config(disable=True)
-        if hasattr(self.pipeline, "enable_attention_slicing"):
-            self.pipeline.enable_attention_slicing()
-        if hasattr(self.pipeline, "enable_vae_slicing"):
-            self.pipeline.enable_vae_slicing()
-        if hasattr(self.pipeline, "enable_vae_tiling"):
-            self.pipeline.enable_vae_tiling()
-        _get_model_cache()[cache_key] = {"pipeline": self.pipeline}
+                text_encoder = T5EncoderModel.from_pretrained(
+                    self._resolve_model_id(),
+                    subfolder="text_encoder",
+                    load_in_8bit=True,
+                    device_map="auto",
+                )
+                self.prompt_encoder_pipeline = PixArtSigmaPipeline.from_pretrained(
+                    self._resolve_model_id(),
+                    text_encoder=text_encoder,
+                    transformer=None,
+                    device_map="balanced",
+                    use_safetensors=True,
+                )
+                self.generation_pipeline = PixArtSigmaPipeline.from_pretrained(
+                    self._resolve_model_id(),
+                    text_encoder=None,
+                    torch_dtype=torch.float16,
+                    use_safetensors=True,
+                )
+                self.generation_pipeline.to(self.device)
+                self.uses_split_pipeline = True
+            except Exception as exc:
+                print(f"[image] Split PixArt-Sigma load failed, falling back to single pipeline: {exc}")
+                self.prompt_encoder_pipeline = None
+                self.generation_pipeline = PixArtSigmaPipeline.from_pretrained(
+                    self._resolve_model_id(),
+                    torch_dtype=torch.float16,
+                    use_safetensors=True,
+                )
+                self.generation_pipeline.to(self.device)
+                self.uses_split_pipeline = False
+        else:
+            self.prompt_encoder_pipeline = None
+            self.generation_pipeline = PixArtSigmaPipeline.from_pretrained(
+                self._resolve_model_id(),
+                use_safetensors=True,
+            )
+            self.generation_pipeline.to(self.device)
+            self.uses_split_pipeline = False
+
+        for pipe in (self.prompt_encoder_pipeline, self.generation_pipeline):
+            if pipe is None:
+                continue
+            if hasattr(pipe, "set_progress_bar_config"):
+                pipe.set_progress_bar_config(disable=True)
+            if hasattr(pipe, "enable_attention_slicing"):
+                pipe.enable_attention_slicing()
+            if hasattr(pipe, "enable_vae_slicing"):
+                pipe.enable_vae_slicing()
+            if hasattr(pipe, "enable_vae_tiling"):
+                pipe.enable_vae_tiling()
+        _get_model_cache()[cache_key] = {
+            "prompt_encoder_pipeline": self.prompt_encoder_pipeline,
+            "generation_pipeline": self.generation_pipeline,
+            "uses_split_pipeline": self.uses_split_pipeline,
+        }
 
     def generate(
         self,
@@ -307,7 +348,7 @@ class SSD1BTextToImageGenerator:
         output_path: str | Path,
     ) -> Path:
         self._load()
-        assert self.pipeline is not None
+        assert self.generation_pipeline is not None
 
         import torch
 
@@ -316,15 +357,43 @@ class SSD1BTextToImageGenerator:
         else:
             generator = torch.Generator().manual_seed(seed)
 
-        result = self.pipeline(
-            prompt=prompt_text,
-            negative_prompt=negative_prompt_text,
-            width=self.config.image_width,
-            height=self.config.image_height,
-            num_inference_steps=self.config.image_num_inference_steps,
-            guidance_scale=self.config.image_guidance_scale,
-            generator=generator,
-        )
+        pipeline_kwargs: dict[str, Any] = {
+            "width": self.config.image_width,
+            "height": self.config.image_height,
+            "num_inference_steps": self.config.image_num_inference_steps,
+            "guidance_scale": self.config.image_guidance_scale,
+            "generator": generator,
+            "clean_caption": False,
+            "max_sequence_length": self.config.image_max_sequence_length,
+            "use_resolution_binning": True,
+        }
+        if self.uses_split_pipeline:
+            assert self.prompt_encoder_pipeline is not None
+            prompt_outputs = self.prompt_encoder_pipeline.encode_prompt(
+                prompt=prompt_text,
+                negative_prompt=negative_prompt_text,
+                clean_caption=False,
+                max_sequence_length=self.config.image_max_sequence_length,
+            )
+            (
+                prompt_embeds,
+                prompt_attention_mask,
+                negative_prompt_embeds,
+                negative_prompt_attention_mask,
+            ) = prompt_outputs
+            result = self.generation_pipeline(
+                prompt_embeds=prompt_embeds.to(self.device),
+                prompt_attention_mask=prompt_attention_mask.to(self.device),
+                negative_prompt_embeds=negative_prompt_embeds.to(self.device),
+                negative_prompt_attention_mask=negative_prompt_attention_mask.to(self.device),
+                **pipeline_kwargs,
+            )
+        else:
+            result = self.generation_pipeline(
+                prompt=prompt_text,
+                negative_prompt=negative_prompt_text,
+                **pipeline_kwargs,
+            )
         generated_image = result.images[0]
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -335,11 +404,18 @@ class SSD1BTextToImageGenerator:
     def unload(self, clear_cache: bool = False) -> None:
         if clear_cache:
             _get_model_cache().pop(self._cache_key(), None)
-            self.pipeline = None
+            self.prompt_encoder_pipeline = None
+            self.generation_pipeline = None
+            self.uses_split_pipeline = False
             _clear_torch_memory()
             return
 
-        self.pipeline = None
+        self.prompt_encoder_pipeline = None
+        self.generation_pipeline = None
+        self.uses_split_pipeline = False
+
+
+SSD1BTextToImageGenerator = PixArtSigmaTextToImageGenerator
 
 
 class KokoroNarrationEngine:
