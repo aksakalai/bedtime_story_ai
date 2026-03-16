@@ -19,10 +19,11 @@ STORY_SYSTEM_PROMPT = (
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
-    "You turn one bedtime-story moment into one compact image prompt for a CLIP-limited image model. Keep only "
-    "visually depictable details. Prioritize distinctive characters, objects, colors, setting, time of day, and "
-    "the main visible action. Keep the prompt short, concrete, and storybook-friendly. Do not mention text, "
-    "captions, logos, watermarks, borders, panels, cameras, or artist names."
+    "You turn one bedtime-story moment into one very short image prompt for a CLIP-limited image model. "
+    "Reply with exactly one compact comma-separated line, not full sentences. Keep only the most important "
+    "visually depictable details: main subject, setting, time of day, one visible action, and mood. "
+    "Do not repeat the whole story. Do not add quality adjectives, camera terms, artist names, text, captions, "
+    "logos, watermarks, borders, frames, or panels."
 )
 
 PART_2_USER_PROMPT = "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, keep it gentle, and write about 50 words. Reply only with the story text."
@@ -112,17 +113,21 @@ def build_story_part_image_summary_messages(
     part_text: str,
 ) -> list[dict[str, Any]]:
     prompt_text = (
-        "Write one compact prompt for a single storybook illustration of this story moment.\n\n"
+        "Write one compact scene prompt for a single storybook illustration of this story moment.\n\n"
         f"Scene description:\n{description_text}\n\n"
         f"Story moment:\n{part_text}\n\n"
-        f"Target visual style:\n{config.image_prompt_style_suffix}\n\n"
-        f"Keep it under {config.image_prompt_summary_max_words} words. Fold the visual style naturally into the "
-        "same short prompt instead of listing separate instructions. Reply only with the final image prompt text."
+        f"Keep it under {config.image_prompt_summary_max_words} words. Use short noun phrases separated by commas. "
+        "Focus on only the unique visible scene details from this one moment. Reply only with the final scene prompt."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
         {"role": "user", "content": prompt_text},
     ]
+
+
+def finalize_image_prompt(config: GenerationConfig, scene_prompt_text: str) -> str:
+    scene_prompt = normalize_text(scene_prompt_text).rstrip(".,;:")
+    return f"{scene_prompt}, {config.image_prompt_style_suffix}"
 
 
 def _format_message_content(content: Any) -> str:

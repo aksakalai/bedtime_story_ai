@@ -15,6 +15,7 @@ from .prompts import (
     build_description_messages,
     build_story_part_image_summary_messages,
     build_story_messages,
+    finalize_image_prompt,
     format_story_messages,
     validate_description_text,
     validate_image_prompt_text,
@@ -170,8 +171,9 @@ class KidStoryPipeline:
                 description_text=warm_description,
                 part_text=warm_story_text,
             )
-            prompt_text = writer.generate_image_prompt(prompt_messages)
-            prompt_text = validate_image_prompt_text(prompt_text, self.config)
+            scene_prompt_text = writer.generate_image_prompt(prompt_messages)
+            scene_prompt_text = validate_image_prompt_text(scene_prompt_text, self.config)
+            prompt_text = finalize_image_prompt(self.config, scene_prompt_text)
             prompt_token_counts = image_generator.validate_prompt_token_budget(prompt_text)
             print(
                 "[warmup] Image prompt token counts: "
@@ -411,8 +413,9 @@ class KidStoryPipeline:
                 description_text=draft_result.description.description_text,
                 part_text=part_text,
             )
-            prompt_text = writer.generate_image_prompt(prompt_messages)
-            prompt_text = validate_image_prompt_text(prompt_text, self.config)
+            scene_prompt_text = writer.generate_image_prompt(prompt_messages)
+            scene_prompt_text = validate_image_prompt_text(scene_prompt_text, self.config)
+            prompt_text = finalize_image_prompt(self.config, scene_prompt_text)
             prompt_token_counts = image_generator.validate_prompt_token_budget(prompt_text)
             print(
                 f"[pipeline] part_{index} image prompt token counts: "
