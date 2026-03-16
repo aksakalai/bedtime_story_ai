@@ -21,8 +21,8 @@ from .prompts import (
 )
 from .providers import (
     KokoroNarrationEngine,
+    PixArtSigmaTextToImageGenerator,
     Qwen25VLMultimodalEngine,
-    SSD1BTextToImageGenerator,
     WhisperWordTimingEngine,
     clear_cached_models,
 )
@@ -57,7 +57,7 @@ class KidStoryPipeline:
         config: GenerationConfig = DEFAULT_CONFIG,
         describer_factory=Qwen25VLMultimodalEngine,
         writer_factory=Qwen25VLMultimodalEngine,
-        image_generator_factory=SSD1BTextToImageGenerator,
+        image_generator_factory=PixArtSigmaTextToImageGenerator,
         narrator_factory=KokoroNarrationEngine,
         word_aligner_factory=WhisperWordTimingEngine,
         video_assembler_factory=FFmpegVideoAssembler,

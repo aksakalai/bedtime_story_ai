@@ -19,6 +19,7 @@ dependencies = [
   "openai-whisper>=20240930",
   "Pillow>=10.4.0",
   "safetensors>=0.4.5",
+  "sentencepiece>=0.2.0",
   "soundfile>=0.13.1",
   "torch>=2.4.0",
   "transformers>=4.50.0"

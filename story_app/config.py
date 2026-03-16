@@ -4,14 +4,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-final-video-warmup-v16-20260316"
+APP_BUILD = "phase2-pixart-sigma-512-v18-20260316"
 
 
 @dataclass(frozen=True)
 class ModelIds:
     image_describer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
     story_writer: str = "Qwen/Qwen2.5-VL-3B-Instruct"
-    part_image_generator: str = "segmind/SSD-1B"
+    part_image_generator: str = "PixArt-alpha/PixArt-Sigma-XL-2-512-MS"
     part_narrator: str = "hexgrad/Kokoro-82M"
     word_aligner: str = "tiny.en"
 
@@ -27,19 +27,17 @@ class GenerationConfig:
     )
     description_max_tokens: int = 192
     story_part_max_tokens: int = 128
-    image_width: int = 1024
-    image_height: int = 1024
+    image_width: int = 512
+    image_height: int = 512
     image_num_inference_steps: int = 20
-    image_guidance_scale: float = 9.0
+    image_guidance_scale: float = 4.5
     image_prompt_style_suffix: str = (
         "Warm, polished children's-book illustration, soft cinematic lighting, expressive characters, "
         "clean composition, bedtime mood, rich color harmony, high detail. No visible text, captions, logos, "
         "watermarks, frames, split panels, speech bubbles, collages, or page borders."
     )
-    image_negative_prompt: str = (
-        "low quality, blurry, muddy colors, flat lighting, deformed anatomy, extra limbs, duplicate characters, "
-        "cropped face, text, letters, watermark, logo, signature, frame, border, collage, split panel"
-    )
+    image_negative_prompt: str = ""
+    image_max_sequence_length: int = 300
     image_seed_stride: int = 1000
     narration_lang_code: str = "a"
     narration_voice: str = "af_heart"
