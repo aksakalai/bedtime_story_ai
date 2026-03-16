@@ -17,8 +17,12 @@ INITIAL_ANCHOR = (
     "object_1_colors: green\n"
     "object_2: coral arch\n"
     "object_2_colors: orange\n"
-    "object_3: none\n"
-    "object_3_colors: none\n"
+    "object_3: sandy floor\n"
+    "object_3_colors: pale beige\n"
+    "object_4: bubbles\n"
+    "object_4_colors: silvery white\n"
+    "object_5: none\n"
+    "object_5_colors: none\n"
     "secondary_actor: none\n"
     "secondary_actor_colors: none\n"
     "page_event: calm exploration\n"
@@ -37,6 +41,10 @@ PART_2_ANCHOR = (
     "object_2_colors: pale gold\n"
     "object_3: coral arch\n"
     "object_3_colors: orange\n"
+    "object_4: sandy floor\n"
+    "object_4_colors: pale beige\n"
+    "object_5: bubbles\n"
+    "object_5_colors: silvery white\n"
     "secondary_actor: none\n"
     "secondary_actor_colors: none\n"
     "page_event: glowing creature appears\n"
@@ -53,8 +61,12 @@ PART_3_ANCHOR = (
     "object_1_colors: green\n"
     "object_2: glowing creature\n"
     "object_2_colors: pale gold\n"
-    "object_3: none\n"
-    "object_3_colors: none\n"
+    "object_3: sandy floor\n"
+    "object_3_colors: pale beige\n"
+    "object_4: none\n"
+    "object_4_colors: none\n"
+    "object_5: none\n"
+    "object_5_colors: none\n"
     "secondary_actor: none\n"
     "secondary_actor_colors: none\n"
     "page_event: calm farewell\n"
@@ -414,7 +426,7 @@ class PipelineTests(unittest.TestCase):
             image_generator = BudgetAwareFakeImageGenerator.instances[0]
             self.assertEqual([call["max_new_tokens"] for call in writer.image_prompt_calls], [41, 41, 41])
             self.assertIn("Current page anchor:", writer.image_prompt_calls[0]["messages"][1]["content"])
-            self.assertIn("Use only the current page anchor, not any previous story text", writer.image_prompt_calls[1]["messages"][1]["content"])
+            self.assertIn("Base the sentence on the current page anchor alone", writer.image_prompt_calls[1]["messages"][1]["content"])
             self.assertNotIn("Story moment:", writer.image_prompt_calls[0]["messages"][1]["content"])
             self.assertEqual(image_generator.prompt_token_limit_calls, [1])
             self.assertEqual(len(image_generator.validated_prompts), 3)

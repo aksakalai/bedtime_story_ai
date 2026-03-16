@@ -26,8 +26,9 @@ class PromptTests(unittest.TestCase):
     def test_build_description_prompt_targets_exact_anchor_sheet(self):
         prompt = build_description_prompt(DEFAULT_CONFIG)
         self.assertIn("fill one compact anchor sheet for page 1", prompt)
-        self.assertIn("Treat the depicted content as a real scene", prompt)
-        self.assertIn("If no clear actor exists, create one fitting general actor", prompt)
+        self.assertIn("window into a real story-world scene", prompt)
+        self.assertIn("If no actor is clearly visible, create one fitting gentle in-world actor", prompt)
+        self.assertIn("up to five concrete recurring objects", prompt)
         for field in ANCHOR_FIELDS:
             self.assertIn(f"{field}:", prompt)
         self.assertTrue(prompt.endswith("Reply only with the anchor sheet text."))
@@ -43,7 +44,8 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[1]["content"][1]["type"], "text")
         self.assertEqual(messages[1]["content"][1]["text"], prompt)
         self.assertTrue(prompt.endswith(DESCRIPTION_USER_PROMPT_SUFFIX))
-        self.assertIn("never as a drawing, picture, sketch, illustration", DESCRIPTION_SYSTEM_PROMPT)
+        self.assertIn("real story-world scene", DESCRIPTION_SYSTEM_PROMPT)
+        self.assertIn("up to five concrete recurring objects", DESCRIPTION_SYSTEM_PROMPT)
 
     def test_build_next_part_anchor_messages_requests_full_next_page_sheet(self):
         messages = build_next_part_anchor_messages(
@@ -57,24 +59,25 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Latest story part:", messages[1]["content"])
         self.assertIn("Write the full anchor sheet for part 2", messages[1]["content"])
         self.assertIn("Carry forward the same actor identity and the same colors", messages[1]["content"])
+        self.assertIn("Prefer concrete recurring objects over broad background elements", messages[1]["content"])
         for field in ANCHOR_FIELDS:
             self.assertIn(f"{field}:", messages[1]["content"])
 
     def test_story_system_prompt_requires_anchor_driven_arc(self):
         self.assertIn("current page anchor is the source of truth", STORY_SYSTEM_PROMPT)
-        self.assertIn("Earlier anchors and story parts are only for continuity", STORY_SYSTEM_PROMPT)
+        self.assertIn("Earlier anchors and story parts are only continuity context", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 1 sets up the actor and scene", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 2 introduces one visible event", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 3 resolves that event", STORY_SYSTEM_PROMPT)
-        self.assertIn("never mention an image, picture, drawing, illustration", STORY_SYSTEM_PROMPT)
+        self.assertIn("events happening inside the story world", STORY_SYSTEM_PROMPT)
 
     def test_build_story_part_1_prompt_uses_current_page_anchor(self):
         prompt = build_story_part_1_prompt(
             "actor: curious little blue fish\nactor_colors: blue and purple\nscene: underwater garden"
         )
         self.assertIn("Current page anchor for part 1:", prompt)
-        self.assertIn("Introduce the actor, scene, and named objects", prompt)
-        self.assertIn("Do not start the main event yet", prompt)
+        self.assertIn("Introduce the actor, scene, and recurring objects", prompt)
+        self.assertIn("Keep page 1 as a calm opening moment", prompt)
         self.assertIn("Use exactly 3 short sentences", prompt)
 
     def test_build_story_messages_for_part_2_includes_anchor_and_story_history(self):
@@ -124,7 +127,7 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[0]["content"], IMAGE_PROMPT_SYSTEM_PROMPT)
         self.assertIn("Current page anchor:", messages[1]["content"])
         self.assertIn("within 74 image-model tokens", messages[1]["content"])
-        self.assertIn("Use only the current page anchor, not any previous story text", messages[1]["content"])
+        self.assertIn("Base the sentence on the current page anchor alone", messages[1]["content"])
         self.assertNotIn("Previous page final image prompt:", messages[1]["content"])
 
     def test_format_story_messages_serializes_anchor_prompts(self):

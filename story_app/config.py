@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-anchor-snapshots-v30-20260316"
+APP_BUILD = "phase2-anchor-5objects-v31-20260316"
 
 
 @dataclass(frozen=True)
@@ -20,12 +20,15 @@ class ModelIds:
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     description_prompt_prefix: str = (
-        "Observe the uploaded scene and fill one compact anchor sheet for page 1 of a children's story. Treat the "
-        "depicted content as a real scene, never as a drawing, picture, sketch, illustration, painting, or child "
-        "art. Identify one central actor. If no clear actor exists, create one fitting general actor for the scene, "
-        "such as a child, bunny, fish, duckling, fox, or similar simple character. Include explicit colors for the "
-        "actor, the scene, and each important object whenever visible. Output exactly these lines in this exact "
-        "order, using `none` when needed:\n"
+        "Observe the uploaded image as a window into a real story-world scene and fill one compact anchor sheet for "
+        "page 1 of a children's bedtime story. Identify one central actor who belongs inside the scene. If no actor "
+        "is clearly visible, create one fitting gentle in-world actor for the setting, such as a little bunny, "
+        "fish, duckling, fox, kitten, puppy, or child. Include explicit colors for the actor, the scene, and up to "
+        "five concrete recurring objects. Prefer specific objects that can return on later pages, such as a car, "
+        "door, fence, lantern, mailbox, chair, table, flower pot, path, or tree, over broad background elements "
+        "like the sky or sun unless they are central. Interpret simple or symbolic shapes as the real places and "
+        "objects they represent in the story world. Output exactly these lines in this exact order, using `none` "
+        "when needed:\n"
         "actor:\n"
         "actor_colors:\n"
         "actor_traits:\n"
@@ -37,14 +40,18 @@ class GenerationConfig:
         "object_2_colors:\n"
         "object_3:\n"
         "object_3_colors:\n"
+        "object_4:\n"
+        "object_4_colors:\n"
+        "object_5:\n"
+        "object_5_colors:\n"
         "secondary_actor:\n"
         "secondary_actor_colors:\n"
         "page_event:\n"
         "mood:\n"
         "Reply only with the anchor sheet text."
     )
-    initial_anchor_max_tokens: int = 224
-    anchor_update_max_tokens: int = 224
+    initial_anchor_max_tokens: int = 256
+    anchor_update_max_tokens: int = 256
     story_part_max_tokens: int = 384
     image_width: int = 1024
     image_height: int = 1024

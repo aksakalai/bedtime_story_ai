@@ -18,6 +18,10 @@ ANCHOR_FIELDS = [
     "object_2_colors",
     "object_3",
     "object_3_colors",
+    "object_4",
+    "object_4_colors",
+    "object_5",
+    "object_5_colors",
     "secondary_actor",
     "secondary_actor_colors",
     "page_event",
@@ -25,39 +29,37 @@ ANCHOR_FIELDS = [
 ]
 
 DESCRIPTION_SYSTEM_PROMPT = (
-    "You observe one uploaded scene and convert it into one compact page anchor sheet for a children's story. Treat "
-    "the depicted content as a real scene, never as a drawing, picture, sketch, illustration, painting, or child "
-    "art. Extract one central actor and explicit colors for the actor, the scene, and important objects whenever "
-    "visible. If no clear actor exists, create one fitting simple actor for the scene, such as a child, bunny, "
-    "fish, duckling, fox, or similar gentle character. Reply only with the exact anchor sheet."
+    "You observe one uploaded image and convert it into one compact page anchor sheet for a children's bedtime "
+    "story. Read the image as a real story-world scene. Extract one central actor and explicit colors for the "
+    "actor, the scene, and up to five concrete recurring objects. If no actor is clearly visible, create one gentle "
+    "in-world actor that fits the setting. Prefer concrete recurring objects over broad background elements. Reply "
+    "only with the exact anchor sheet."
 )
 
 DESCRIPTION_USER_PROMPT_SUFFIX = "Reply only with the anchor sheet text."
 
 ANCHOR_UPDATE_SYSTEM_PROMPT = (
-    "You update one compact page anchor sheet for the next page of the same bedtime story. Treat all anchors as real "
-    "scene facts, never as image-medium descriptions. Keep the same actor identity unless the latest story part "
-    "clearly changes it. Keep actor colors, object colors, and scene colors consistent unless the latest story part "
-    "clearly changes them. Output one full next-page anchor sheet with the exact same keys, not a diff."
+    "You update one compact page anchor sheet for the next page of the same bedtime story. Treat every anchor as a "
+    "snapshot of the story world. Keep the actor identity, colors, and recurring objects consistent unless the "
+    "latest story part clearly changes them. Carry forward concrete recurring objects that still matter on the next "
+    "page. Output one full next-page anchor sheet with the exact same keys."
 )
 
 STORY_SYSTEM_PROMPT = (
     "You write gentle bedtime-story prose for three consecutive children's picture-book pages. The current page "
-    "anchor is the source of truth for what should be visible on this page. Earlier anchors and story parts are only "
-    "for continuity. Keep the same central actor across the story unless the anchors explicitly change that. Reuse "
-    "the actor identity, actor colors, scene, and named objects naturally in the prose so the illustrations stay "
-    "consistent. Part 1 sets up the actor and scene. Part 2 introduces one visible event, mystery, or clear change. "
-    "Part 3 resolves that event with a calm ending. Treat the story world as real and never mention an image, "
-    "picture, drawing, illustration, sketch, painting, child art, paper, artist, or style. Reply only with the "
-    "requested story text."
+    "anchor is the source of truth for what belongs on this page. Earlier anchors and story parts are only "
+    "continuity context. Keep the same central actor across the story unless the anchors change that. Reuse the "
+    "actor identity, actor colors, scene, and recurring objects naturally in the prose so the illustrations stay "
+    "consistent. Write only about events happening inside the story world to the actor, the place, and the objects "
+    "on the page. Part 1 sets up the actor and scene. Part 2 introduces one visible event, mystery, or clear "
+    "change. Part 3 resolves that event with a calm ending. Reply only with the requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
     "You turn one page anchor into one very short image prompt sentence for a CLIP-limited image model. The anchor "
-    "is the source of truth for what should be visible. Mention the actor early, preserve the actor colors and object "
-    "colors exactly when they are present, and describe only the current page snapshot. Treat the content as a real "
-    "scene. Never describe it as a drawing, picture, sketch, or illustration inside the prompt sentence. Reply only "
-    "with one short sentence."
+    "is the source of truth for what should be visible on that page. Mention the actor early, preserve the actor "
+    "colors and object colors exactly when they are present, and describe only the current page snapshot as a real "
+    "story-world scene. Reply only with one short sentence."
 )
 
 
@@ -123,8 +125,9 @@ def build_next_part_anchor_messages(
         f"Latest story part:\n{latest_part_text}\n\n"
         f"{update_goal}\n"
         "Carry forward the same actor identity and the same colors unless the latest story part clearly changes them. "
-        "If the scene shifts, move only to a directly related nearby place. If a new important object or secondary "
-        "actor appears, include it. Output exactly these keys in this exact order, using `none` when needed:\n"
+        "If the scene shifts, move only to a directly related nearby place. Prefer concrete recurring objects over "
+        "broad background elements. If a new important object or secondary actor appears, include it. Output exactly "
+        "these keys in this exact order, using `none` when needed:\n"
         + "\n".join(f"{field}:" for field in ANCHOR_FIELDS)
         + "\nReply only with the full next-page anchor sheet."
     )
@@ -158,9 +161,8 @@ def build_story_part_1_prompt(current_anchor_text: str) -> str:
     return (
         "Current page anchor for part 1:\n"
         f"{current_anchor_text}\n\n"
-        "Write only part 1 of the bedtime story. Introduce the actor, scene, and named objects from this anchor. "
-        "Keep the mood calm and warm. Do not start the main event yet. Use exactly 3 short sentences. Reply only "
-        "with the story text."
+        "Write only part 1 of the bedtime story. Introduce the actor, scene, and recurring objects from this anchor. "
+        "Keep page 1 as a calm opening moment. Use exactly 3 short sentences. Reply only with the story text."
     )
 
 
@@ -217,8 +219,8 @@ def build_story_part_image_summary_messages(
         f"Current page anchor:\n{page_anchor_text}\n\n"
         f"{part_role}\n"
         f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Mention the actor early. Keep "
-        "the actor colors, scene colors, and object colors exactly when they are present. Use only the current page "
-        "anchor, not any previous story text. Keep it extremely concise. Reply only with the final sentence."
+        "the actor colors, scene colors, and object colors exactly when they are present. Base the sentence on the "
+        "current page anchor alone. Keep it extremely concise. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
