@@ -20,13 +20,12 @@ STORY_SYSTEM_PROMPT = (
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
-    "You turn one bedtime-story moment into one short image prompt sentence for a CLIP-limited image model. "
-    "The image should feel like a children's picture-book illustration. Reply with exactly one sentence describing "
-    "only the unique visible details of this moment. Keep the sentence concrete and visual. Prioritize the main "
-    "subject, distinctive objects, setting, time of day, and the one visible event or change that makes this "
-    "moment different. Keep only a few grounding scene details and make the new change or ending state prominent. "
-    "Do not repeat the whole story. Do not add camera terms, artist names, text, captions, logos, watermarks, "
-    "borders, frames, panels, or extra unrelated details."
+    "You turn one bedtime-story moment into one very short image prompt sentence for a CLIP-limited image model. "
+    "The image should feel like a children's picture-book illustration. Reply with one short sentence only. "
+    "Name just the few visual details needed to recognize the scene and highlight the single visible event or "
+    "change that makes this page different. Keep recurring background details to a minimum. Do not restate the "
+    "whole scene description or list every object. Do not add camera terms, artist names, text, captions, logos, "
+    "watermarks, borders, frames, panels, or extra unrelated details."
 )
 
 PART_2_USER_PROMPT = (
@@ -144,8 +143,9 @@ def build_story_part_image_summary_messages(
         f"Scene description:\n{description_text}\n\n"
         f"Story moment:\n{part_text}\n\n"
         f"{part_role}\n\n"
-        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Focus only on the unique "
-        "visible details from this one moment. Reply only with the final sentence."
+        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Aim well below that limit. "
+        "Mention only the main subject, at most two recurring anchor details, and the one new visible event or "
+        "ending change that matters most on this page. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
