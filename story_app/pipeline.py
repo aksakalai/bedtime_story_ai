@@ -137,6 +137,9 @@ class KidStoryPipeline:
         narrator = self._get_narrator()
         word_aligner = self._get_word_aligner()
         video_assembler = self._get_video_assembler()
+        image_prompt_token_limit = image_generator.get_prompt_token_limit(
+            buffer_tokens=self.config.image_prompt_token_buffer,
+        )
 
         warm_description = "A small blue house rests under a bright moon beside two quiet trees."
         warm_story_text = (
@@ -170,11 +173,21 @@ class KidStoryPipeline:
                 self.config,
                 description_text=warm_description,
                 part_text=warm_story_text,
+                max_image_prompt_tokens=image_prompt_token_limit,
             )
-            scene_prompt_text = writer.generate_image_prompt(prompt_messages)
+            scene_prompt_text = writer.generate_image_prompt(
+                prompt_messages,
+                max_new_tokens=min(self.config.image_prompt_summary_max_tokens, image_prompt_token_limit),
+            )
             scene_prompt_text = validate_image_prompt_text(scene_prompt_text, self.config)
             prompt_text = finalize_image_prompt(self.config, scene_prompt_text)
-            prompt_token_counts = image_generator.validate_prompt_token_budget(prompt_text)
+            prompt_token_counts = image_generator.validate_prompt_token_budget(
+                prompt_text,
+                buffer_tokens=self.config.image_prompt_token_buffer,
+            )
+            print(
+                f"[warmup] Image prompt token limit: {image_prompt_token_limit}"
+            )
             print(
                 "[warmup] Image prompt token counts: "
                 + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())
@@ -368,6 +381,9 @@ class KidStoryPipeline:
         narrator = self._get_narrator()
         word_aligner = self._get_word_aligner()
         video_assembler = self._get_video_assembler()
+        image_prompt_token_limit = image_generator.get_prompt_token_limit(
+            buffer_tokens=self.config.image_prompt_token_buffer,
+        )
         self._notify(progress_callback, 0.9, "Generating storyboard images")
         story_parts = [
             draft_result.part_1_text,
@@ -412,11 +428,21 @@ class KidStoryPipeline:
                 self.config,
                 description_text=draft_result.description.description_text,
                 part_text=part_text,
+                max_image_prompt_tokens=image_prompt_token_limit,
             )
-            scene_prompt_text = writer.generate_image_prompt(prompt_messages)
+            scene_prompt_text = writer.generate_image_prompt(
+                prompt_messages,
+                max_new_tokens=min(self.config.image_prompt_summary_max_tokens, image_prompt_token_limit),
+            )
             scene_prompt_text = validate_image_prompt_text(scene_prompt_text, self.config)
             prompt_text = finalize_image_prompt(self.config, scene_prompt_text)
-            prompt_token_counts = image_generator.validate_prompt_token_budget(prompt_text)
+            prompt_token_counts = image_generator.validate_prompt_token_budget(
+                prompt_text,
+                buffer_tokens=self.config.image_prompt_token_buffer,
+            )
+            print(
+                f"[pipeline] part_{index} image prompt token limit: {image_prompt_token_limit}"
+            )
             print(
                 f"[pipeline] part_{index} image prompt token counts: "
                 + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())

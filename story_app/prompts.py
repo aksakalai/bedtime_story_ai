@@ -19,11 +19,11 @@ STORY_SYSTEM_PROMPT = (
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
-    "You turn one bedtime-story moment into one very short image prompt for a CLIP-limited image model. "
-    "Reply with exactly one compact comma-separated line, not full sentences. Keep only the most important "
-    "visually depictable details: main subject, setting, time of day, one visible action, and mood. "
-    "Do not repeat the whole story. Do not add quality adjectives, camera terms, artist names, text, captions, "
-    "logos, watermarks, borders, frames, or panels."
+    "You turn one bedtime-story moment into one short image prompt sentence for a CLIP-limited image model. "
+    "Reply with exactly one sentence describing only the unique visible details of the scene. Keep the sentence "
+    "concrete and visual. Prioritize the main subject, distinctive objects, setting, time of day, and one visible "
+    "action. Do not repeat the whole story. Do not add camera terms, artist names, text, captions, logos, "
+    "watermarks, borders, frames, panels, or extra unrelated details."
 )
 
 PART_2_USER_PROMPT = "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, keep it gentle, and write about 50 words. Reply only with the story text."
@@ -111,13 +111,14 @@ def build_story_part_image_summary_messages(
     *,
     description_text: str,
     part_text: str,
+    max_image_prompt_tokens: int,
 ) -> list[dict[str, Any]]:
     prompt_text = (
-        "Write one compact scene prompt for a single storybook illustration of this story moment.\n\n"
+        "Write one short sentence prompt for a single illustration of this story moment.\n\n"
         f"Scene description:\n{description_text}\n\n"
         f"Story moment:\n{part_text}\n\n"
-        f"Keep it under {config.image_prompt_summary_max_words} words. Use short noun phrases separated by commas. "
-        "Focus on only the unique visible scene details from this one moment. Reply only with the final scene prompt."
+        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Focus only on the unique "
+        "visible details from this one moment. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
@@ -126,8 +127,11 @@ def build_story_part_image_summary_messages(
 
 
 def finalize_image_prompt(config: GenerationConfig, scene_prompt_text: str) -> str:
-    scene_prompt = normalize_text(scene_prompt_text).rstrip(".,;:")
-    return f"{scene_prompt}, {config.image_prompt_style_suffix}"
+    scene_prompt = normalize_text(scene_prompt_text)
+    if config.image_prompt_style_suffix.strip():
+        scene_prompt = scene_prompt.rstrip(".,;:")
+        return f"{scene_prompt}, {config.image_prompt_style_suffix}"
+    return scene_prompt
 
 
 def _format_message_content(content: Any) -> str:
@@ -176,8 +180,9 @@ def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
 
 def validate_image_prompt_text(raw_text: str, config: GenerationConfig) -> str:
     text = normalize_text(raw_text)
-    if len(text.split()) > config.image_prompt_summary_max_words:
+    sentence_parts = [part.strip() for part in re.split(r"[.!?]+", text) if part.strip()]
+    if len(sentence_parts) > 1:
         raise ValidationError(
-            f"Image prompt summary must contain at most {config.image_prompt_summary_max_words} words."
+            "Image prompt summary must be exactly one sentence."
         )
     return text

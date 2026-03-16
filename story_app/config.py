@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-image-prompt-summaries-v19-20260316"
+APP_BUILD = "phase2-image-prompt-budget-v20-20260316"
 
 
 @dataclass(frozen=True)
@@ -31,15 +31,13 @@ class GenerationConfig:
     image_height: int = 1024
     image_num_inference_steps: int = 20
     image_guidance_scale: float = 9.0
-    image_prompt_style_suffix: str = (
-        "storybook illustration, warm bedtime mood, soft cinematic lighting, rich color harmony"
-    )
+    image_prompt_style_suffix: str = ""
     image_negative_prompt: str = (
         "low quality, blurry, muddy colors, flat lighting, deformed anatomy, extra limbs, duplicate characters, "
         "cropped face, text, letters, watermark, logo, signature, frame, border, collage, split panel"
     )
-    image_prompt_summary_max_tokens: int = 48
-    image_prompt_summary_max_words: int = 24
+    image_prompt_summary_max_tokens: int = 76
+    image_prompt_token_buffer: int = 1
     image_seed_stride: int = 1000
     narration_lang_code: str = "a"
     narration_voice: str = "af_heart"

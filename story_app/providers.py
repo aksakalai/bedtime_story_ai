@@ -232,11 +232,16 @@ class Qwen25VLMultimodalEngine:
             ),
         )
 
-    def generate_image_prompt(self, messages: list[dict[str, Any]]) -> str:
+    def generate_image_prompt(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        max_new_tokens: int | None = None,
+    ) -> str:
         return self._generate_from_messages(
             image_path=None,
             messages=messages,
-            max_new_tokens=self.config.image_prompt_summary_max_tokens,
+            max_new_tokens=max_new_tokens or self.config.image_prompt_summary_max_tokens,
             log_prefix="image_prompt",
             error_message=(
                 "Image prompt summary generation did not finish naturally before the safety limit. "
@@ -358,7 +363,30 @@ class SSD1BTextToImageGenerator:
             input_ids = input_ids[0]
         return len(input_ids)
 
-    def validate_prompt_token_budget(self, prompt_text: str) -> dict[str, int]:
+    def get_prompt_token_limit(self, *, buffer_tokens: int = 0) -> int:
+        self._load()
+        assert self.pipeline is not None
+
+        max_lengths: list[int] = []
+        for tokenizer_name in ("tokenizer", "tokenizer_2"):
+            tokenizer = getattr(self.pipeline, tokenizer_name, None)
+            if tokenizer is None:
+                continue
+            model_max_length = getattr(tokenizer, "model_max_length", None)
+            if isinstance(model_max_length, int) and model_max_length > 0:
+                max_lengths.append(model_max_length)
+
+        if not max_lengths:
+            raise ValidationError("Could not determine the current image model token limit.")
+
+        return min(max_lengths) - buffer_tokens
+
+    def validate_prompt_token_budget(
+        self,
+        prompt_text: str,
+        *,
+        buffer_tokens: int = 0,
+    ) -> dict[str, int]:
         self._load()
         assert self.pipeline is not None
 
@@ -371,8 +399,10 @@ class SSD1BTextToImageGenerator:
             token_count = self._count_tokens(tokenizer, prompt_text)
             counts[tokenizer_name] = token_count
             model_max_length = getattr(tokenizer, "model_max_length", None)
-            if isinstance(model_max_length, int) and model_max_length > 0 and token_count > model_max_length:
-                violations.append(f"{tokenizer_name}={token_count}>{model_max_length}")
+            if isinstance(model_max_length, int) and model_max_length > 0:
+                effective_limit = model_max_length - buffer_tokens
+                if token_count > effective_limit:
+                    violations.append(f"{tokenizer_name}={token_count}>{effective_limit}")
 
         if violations:
             raise ValidationError(
