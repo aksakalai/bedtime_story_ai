@@ -109,6 +109,6 @@ demo.launch(debug=True, share=True, inline=True)
 
 - Description: `Qwen/Qwen2.5-VL-3B-Instruct`
 - Story drafting: `Qwen/Qwen2.5-VL-3B-Instruct`
-- Storyboard images: `PixArt-alpha/PixArt-Sigma-XL-2-512-MS`
+- Storyboard images: `segmind/SSD-1B`
 - Narration: `hexgrad/Kokoro-82M`
 - Word timing: `tiny.en` via OpenAI Whisper
