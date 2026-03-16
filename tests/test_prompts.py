@@ -31,6 +31,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("descriptive role instead of a proper name", prompt)
         self.assertIn("One sentence must explicitly say who the central actor is", prompt)
         self.assertIn("Keep all other details faithful to visible scene facts", prompt)
+        self.assertIn("Treat the depicted content as a real scene", prompt)
+        self.assertIn("Never mention the image, picture, drawing, illustration, sketch, painting, child art", prompt)
         self.assertIn("Keep the prose concise", prompt)
         self.assertIn("Reply only with the description text", prompt)
 
@@ -45,6 +47,8 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[1]["content"][1]["type"], "text")
         self.assertEqual(messages[1]["content"][1]["text"], prompt)
         self.assertTrue(prompt.endswith(DESCRIPTION_USER_PROMPT_SUFFIX))
+        self.assertIn("Treat the depicted content as a real scene", DESCRIPTION_SYSTEM_PROMPT)
+        self.assertIn("Never mention the image, picture, drawing, illustration, sketch", DESCRIPTION_SYSTEM_PROMPT)
 
     def test_story_system_prompt_requires_same_actor_and_arc(self):
         self.assertIn("same central actor", STORY_SYSTEM_PROMPT)
@@ -55,6 +59,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Part 3 resolves that same event", STORY_SYSTEM_PROMPT)
         self.assertIn("directly related nearby place", STORY_SYSTEM_PROMPT)
         self.assertIn("keep the prose concise", STORY_SYSTEM_PROMPT)
+        self.assertIn("never refer to an image, picture, drawing, illustration, sketch, painting, child art", STORY_SYSTEM_PROMPT)
 
     def test_build_continuity_brief_messages_targets_recurring_visual_canon(self):
         messages = build_continuity_brief_messages("A blue house with a red roof stands behind a child in a sunny yard.")
@@ -65,6 +70,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("actor: <full actor phrase>; anchors: <anchor phrase 1>, <anchor phrase 2>, <anchor phrase 3>", messages[1]["content"])
         self.assertIn("The actor phrase must include the actor's defining visual traits", messages[1]["content"])
         self.assertIn("Avoid vague anchors like fish, house, scales, plants", messages[1]["content"])
+        self.assertIn("Use only real scene terms, never image-medium terms", messages[1]["content"])
         self.assertIn("Reply only with the continuity brief text", messages[1]["content"])
 
     def test_build_story_part_1_prompt_injects_scene_and_actor_description(self):
@@ -80,6 +86,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Naturally repeat the actor phrase and any visible canon anchors", prompt)
         self.assertIn("do not start the main event yet", prompt)
         self.assertIn("make each sentence short", prompt)
+        self.assertIn("never mention drawings, pictures, illustrations, sketches, paintings, or child art", prompt)
         self.assertIn("Use exactly 3 short sentences", prompt)
 
     def test_part_2_prompt_targets_actor_affecting_event(self):
@@ -164,6 +171,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("reuse the actor phrase from the continuity brief", messages[1]["content"])
         self.assertIn("at most two recurring anchor details", messages[1]["content"])
         self.assertIn("keep its same described color and identity", messages[1]["content"])
+        self.assertIn("Do not describe the scene as a drawing, sketch, or picture", IMAGE_PROMPT_SYSTEM_PROMPT)
 
     def test_format_story_messages_serializes_text_story_turns(self):
         formatted = format_story_messages(

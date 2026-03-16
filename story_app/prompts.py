@@ -11,7 +11,9 @@ DESCRIPTION_SYSTEM_PROMPT = (
     "defines the scene and one central actor for a children's story. If a notable character is clearly present, use "
     "that character as the actor. If no notable character is clearly present, invent one fitting scene-related actor "
     "using a descriptive role instead of a proper name. The paragraph must explicitly state who that actor is and "
-    "what defining visual traits make that actor recognizable. Do not add labels or meta commentary."
+    "what defining visual traits make that actor recognizable. Treat the depicted content as a real scene, not as a "
+    "drawing or uploaded image. Never mention the image, picture, drawing, illustration, sketch, painting, child "
+    "art, paper, style, artist, or composition. Do not add labels or meta commentary."
 )
 
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
@@ -22,7 +24,8 @@ CONTINUITY_BRIEF_SYSTEM_PROMPT = (
     "as one full descriptive phrase, then list only the few recurring anchors that should stay visually the same "
     "when visible. Use concrete colors and identities only when the description already gives them. Never reduce "
     "specific details to bare nouns if the description gives stronger visual attributes. Do not rewrite the full "
-    "scene description. Reply only with the continuity brief text."
+    "scene description. Use only real scene terms, never image-medium terms. Reply only with the continuity brief "
+    "text."
 )
 
 STORY_SYSTEM_PROMPT = (
@@ -34,7 +37,8 @@ STORY_SYSTEM_PROMPT = (
     "noticeable change affecting that actor. Part 3 resolves that same event with a calm hopeful ending. If the "
     "setting shifts, move only to a directly related nearby place from the previous page. Keep the actor consistent, "
     "keep the prose concise, do not rename the actor, and do not introduce proper names unless the description "
-    "already uses one. Reply only with the requested story text."
+    "already uses one. Treat the story world as real and never refer to an image, picture, drawing, illustration, "
+    "sketch, painting, child art, or how the source looked on the page. Reply only with the requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
@@ -46,7 +50,8 @@ IMAGE_PROMPT_SYSTEM_PROMPT = (
     "color and identity instead of redesigning it. Mention the actor first or early, keep recurring anchors to a "
     "bare minimum, and highlight the one visible event, mystery, or resolved state that makes this page different. "
     "Do not restage the previous page, restate the whole scene description, or list every object. Do not add camera "
-    "terms, artist names, text, captions, logos, watermarks, borders, frames, panels, or extra unrelated details."
+    "terms, artist names, text, captions, logos, watermarks, borders, frames, panels, or extra unrelated details. "
+    "Do not describe the scene as a drawing, sketch, or picture inside the prompt."
 )
 
 PART_2_USER_PROMPT = (
@@ -101,7 +106,8 @@ def build_continuity_brief_messages(description_text: str) -> list[dict[str, Any
         "color, species, clothing, size, or other distinctive appearance details. Each anchor must be a short noun "
         "phrase with its defining color or identity if the description gives one. Avoid vague anchors like fish, "
         "house, scales, plants, sky, sun, or current on their own when stronger phrases are available. Keep it very "
-        "concise and do not rewrite the whole scene. Reply only with the continuity brief text."
+        "concise and do not rewrite the whole scene. Use only real scene terms, never image-medium terms. Reply only "
+        "with the continuity brief text."
     )
     return [
         {"role": "system", "content": CONTINUITY_BRIEF_SYSTEM_PROMPT},
@@ -117,8 +123,9 @@ def build_story_part_1_prompt(description_text: str, continuity_brief: str) -> s
         "Open with the same central actor in the described setting. Establish who the actor is, where they are, and "
         "the calm mood of the page. Naturally repeat the actor phrase and any visible canon anchors. Let the actor "
         "notice or approach something gentle, but do not start the main event yet. Keep it warm, concrete, easy to "
-        "illustrate, concise, and make each sentence short. Use exactly 3 short sentences. Reply only with the "
-        "story text."
+        "illustrate, concise, and make each sentence short. Treat the scene as real and never mention drawings, "
+        "pictures, illustrations, sketches, paintings, or child art. Use exactly 3 short sentences. Reply only with "
+        "the story text."
     )
 
 

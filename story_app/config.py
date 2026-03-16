@@ -26,8 +26,9 @@ class GenerationConfig:
         "proper name, and make that actor feel natural in the scene. One sentence must explicitly say who the "
         "central actor is. Describe the actor clearly enough for story and image continuity, including defining "
         "visual traits, where they are, and what they are doing or noticing. Keep all other details faithful to "
-        "visible scene facts. Keep the prose concise. Do not mention the image, drawing, painting, paper, style, "
-        "artist, or composition unless those are part of the depicted scene itself. Reply only with the "
+        "visible scene facts. Treat the depicted content as a real scene, not as a drawing or uploaded image. Keep "
+        "the prose concise. Never mention the image, picture, drawing, illustration, sketch, painting, child art, "
+        "paper, style, artist, or composition. Reply only with the "
         "description text."
     )
     description_max_tokens: int = 448

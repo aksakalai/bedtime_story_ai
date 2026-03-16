@@ -288,7 +288,7 @@ class PipelineTests(unittest.TestCase):
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
-            self.assertEqual(NonEosStoryProvider.instances[0].story_calls, 2)
+            self.assertEqual(NonEosStoryProvider.instances[-1].story_calls, 2)
 
     def test_pipeline_stops_when_continuity_brief_does_not_finish_with_eos(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -348,10 +348,13 @@ class PipelineTests(unittest.TestCase):
             pipeline.create_story_draft(self._create_input_file(root))
             pipeline.create_story_draft(self._create_input_file(root))
 
-            self.assertEqual(len(SharedFakeProvider.instances), 1)
+            self.assertEqual(len(SharedFakeProvider.instances), 2)
             self.assertEqual(SharedFakeProvider.instances[0].description_calls, 2)
-            self.assertEqual(SharedFakeProvider.instances[0].story_calls, 6)
+            self.assertEqual(SharedFakeProvider.instances[0].story_calls, 0)
+            self.assertEqual(SharedFakeProvider.instances[1].description_calls, 0)
+            self.assertEqual(SharedFakeProvider.instances[1].story_calls, 6)
             self.assertEqual(SharedFakeProvider.instances[0].unload_calls, 0)
+            self.assertEqual(SharedFakeProvider.instances[1].unload_calls, 0)
 
     def test_pipeline_can_clear_loaded_models(self):
         SharedFakeProvider.instances = []
@@ -366,6 +369,7 @@ class PipelineTests(unittest.TestCase):
             pipeline.clear_loaded_models()
 
             self.assertEqual(SharedFakeProvider.instances[0].unload_calls, 1)
+            self.assertEqual(SharedFakeProvider.instances[1].unload_calls, 1)
 
     def test_story_package_uses_image_token_budget_and_previous_page_prompt(self):
         PackageFakeProvider.instances = []
@@ -386,7 +390,7 @@ class PipelineTests(unittest.TestCase):
             )
             result = pipeline.create_story_package(self._create_input_file(root))
 
-            writer = PackageFakeProvider.instances[0]
+            writer = PackageFakeProvider.instances[-1]
             image_generator = BudgetAwareFakeImageGenerator.instances[0]
             self.assertEqual(
                 [call["max_new_tokens"] for call in writer.image_prompt_calls],

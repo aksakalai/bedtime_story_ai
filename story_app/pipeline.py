@@ -91,10 +91,6 @@ class KidStoryPipeline:
         return self._describer
 
     def _get_writer(self):
-        if self.writer_factory is self.describer_factory:
-            writer = self._get_describer()
-            self._writer = writer
-            return writer
         if self._writer is None:
             self._writer = self.writer_factory(self.config)
         return self._writer
