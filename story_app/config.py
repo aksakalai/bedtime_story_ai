@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-image-summary-tightening-v25-20260316"
+APP_BUILD = "phase2-central-actor-arc-v26-20260316"
 
 
 @dataclass(frozen=True)
@@ -20,13 +20,17 @@ class ModelIds:
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     description_prompt_prefix: str = (
-        "Describe the depicted scene itself in one concise paragraph. Include distinctive objects, colors, counts, "
-        "positions, characters or animals if clearly visible, and other uniquely identifiable details. Use only "
-        "visible scene facts. Do not mention the image, drawing, painting, paper, style, artist, or composition "
-        "unless those are part of the depicted scene itself. Reply only with the description text."
+        "Describe the depicted scene in one grounded prose paragraph of about 5 sentences. First establish the "
+        "setting. Then identify one notable central actor or character if one is clearly present. If no notable "
+        "character is clearly present, invent one fitting scene-related actor using a descriptive role instead of a "
+        "proper name, and make that actor feel natural in the scene. Describe the actor clearly enough for story and "
+        "image continuity, including what they look like, where they are, and what they are doing or noticing. Keep "
+        "all other details faithful to visible scene facts. Do not mention the image, drawing, painting, paper, "
+        "style, artist, or composition unless those are part of the depicted scene itself. Reply only with the "
+        "description text."
     )
-    description_max_tokens: int = 192
-    story_part_max_tokens: int = 160
+    description_max_tokens: int = 320
+    story_part_max_tokens: int = 256
     image_width: int = 1024
     image_height: int = 1024
     image_num_inference_steps: int = 20
@@ -36,7 +40,7 @@ class GenerationConfig:
         "low quality, blurry, muddy colors, flat lighting, deformed anatomy, extra limbs, duplicate characters, "
         "cropped face, text, letters, watermark, logo, signature, frame, border, collage, split panel"
     )
-    image_prompt_summary_max_tokens: int = 76
+    image_prompt_summary_max_tokens: int = 256
     image_prompt_token_buffer: int = 1
     image_seed_stride: int = 1000
     narration_lang_code: str = "a"
@@ -65,8 +69,8 @@ class GenerationConfig:
     overlay_panel_border_thickness: int = 2
     overlay_panel_shadow_opacity: float = 0.18
     overlay_panel_shadow_offset: int = 8
-    min_description_words: int = 10
-    min_story_part_words: int = 1
+    min_description_words: int = 0
+    min_story_part_words: int = 0
     random_seed: int = 42
     app_build: str = APP_BUILD
     models: ModelIds = field(default_factory=ModelIds)

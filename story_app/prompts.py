@@ -7,37 +7,45 @@ from .config import GenerationConfig
 from .schemas import ValidationError
 
 DESCRIPTION_SYSTEM_PROMPT = (
-    "You carefully observe the image and follow the current request. Write only a grounded description of the "
-    "depicted scene. Do not add labels or meta commentary."
+    "You carefully observe the image and follow the current request. Write only one grounded prose paragraph that "
+    "defines the scene and one central actor for a children's story. If a notable character is clearly present, use "
+    "that character as the actor. If no notable character is clearly present, invent one fitting scene-related actor "
+    "using a descriptive role instead of a proper name. Do not add labels or meta commentary."
 )
 
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
 
 STORY_SYSTEM_PROMPT = (
-    "You write gentle bedtime-story prose for three consecutive children's picture-book pages. Stay faithful to "
-    "the scene description and earlier parts. Make each part easy to illustrate and clearly different from the "
-    "others. Reply only with the requested story text."
+    "You write gentle bedtime-story prose for three consecutive children's picture-book pages that follow the same "
+    "central actor across one simple story arc. Stay faithful to the scene-and-actor description and to earlier "
+    "parts. Part 1 introduces the scene and actor. Part 2 introduces one visible event, mystery, or noticeable "
+    "change affecting that actor. Part 3 resolves that same event with a calm hopeful ending. If the setting "
+    "shifts, move only to a directly related nearby place from the previous page. Keep the actor consistent and do "
+    "not introduce proper names unless the description already uses one. Reply only with the requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
     "You turn one bedtime-story moment into one very short image prompt sentence for a CLIP-limited image model. "
-    "The image should feel like a children's picture-book illustration. Reply with one short sentence only. "
-    "Name just the few visual details needed to recognize the scene and highlight the single visible event or "
-    "change that makes this page different. Keep recurring background details to a minimum. Do not restate the "
-    "whole scene description or list every object. Do not add camera terms, artist names, text, captions, logos, "
-    "watermarks, borders, frames, panels, or extra unrelated details."
+    "The image should feel like a children's picture-book illustration. Reply with one short sentence only. Keep "
+    "the same central actor and story continuity, but describe only what must be visible on this page. Mention the "
+    "actor first or early, keep recurring anchors to a bare minimum, and highlight the one visible event, mystery, "
+    "or resolved state that makes this page different. Do not restage the previous page, restate the whole scene "
+    "description, or list every object. Do not add camera terms, artist names, text, captions, logos, watermarks, "
+    "borders, frames, panels, or extra unrelated details."
 )
 
 PART_2_USER_PROMPT = (
-    "Write only part 2 of the same bedtime story. Continue directly from part 1. Stay grounded in the same scene "
-    "description and introduce one clear visible change or event so this page looks noticeably different from part "
-    "1. Keep it gentle. Write 45 to 55 words in 2 or 3 sentences. Reply only with the story text."
+    "Write only part 2 of the same bedtime story. Continue directly from part 1. Keep following the same central "
+    "actor, and introduce one visible event, mystery, or noticeable change that affects that actor and makes this "
+    "page look clearly different from part 1. If the setting shifts, move only to a directly related nearby place "
+    "from part 1. Do not resolve the event yet. Use exactly 3 sentences. Reply only with the story text."
 )
 
 PART_3_USER_PROMPT = (
-    "Write only part 3 of the same bedtime story. Continue directly from part 2. Stay grounded in the same scene "
-    "description and conclude with a calm hopeful ending that shows another visible change and the settled final "
-    "state. Write 45 to 55 words in 2 or 3 sentences. Reply only with the story text."
+    "Write only part 3 of the same bedtime story. Continue directly from part 2. Keep following the same central "
+    "actor, resolve the same event or change from part 2, and show the calm final state that makes this page look "
+    "clearly different from part 2. If the setting shifts, move only to a directly related nearby place from part "
+    "2. Use exactly 3 sentences. Reply only with the story text."
 )
 
 
@@ -69,10 +77,11 @@ def build_description_messages(prompt_text: str) -> list[dict[str, Any]]:
 def build_story_part_1_prompt(description_text: str) -> str:
     return (
         "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
-        f"Scene description:\n{description_text}\n\n"
-        "Begin with a clear opening picture-book scene. Establish the setting and main subjects. Do not introduce "
-        "the main change yet. Keep it warm and grounded in the visible details. Write 45 to 55 words in 2 or 3 "
-        "sentences. Reply only with the story text."
+        f"Scene and actor description:\n{description_text}\n\n"
+        "Open with the same central actor in the described setting. Establish who the actor is, where they are, and "
+        "the calm mood of the page. Let the actor notice or approach something gentle, but do not start the main "
+        "event yet. Keep it warm, concrete, and easy to illustrate. Use exactly 3 sentences. Reply only with the "
+        "story text."
     )
 
 
@@ -124,28 +133,38 @@ def build_story_part_image_summary_messages(
     part_text: str,
     part_index: int,
     max_image_prompt_tokens: int,
+    previous_image_prompt: str | None = None,
 ) -> list[dict[str, Any]]:
     if part_index == 1:
         part_role = (
-            "This is part 1, so emphasize the opening scene and the main subjects clearly."
+            "This is part 1, so establish the actor in the opening scene and make the clearest recurring anchors "
+            "easy to recognize."
         )
     elif part_index == 2:
         part_role = (
-            "This is part 2, so make the new event or visible change the main focus."
+            "This is part 2, so keep the same actor and make the new visible event or change the main focus."
         )
     else:
         part_role = (
-            "This is part 3, so make the calm concluding change or ending state the main focus."
+            "This is part 3, so keep the same actor and make the resolved final state the main focus."
+        )
+
+    previous_page_section = ""
+    if previous_image_prompt is not None:
+        previous_page_section = (
+            f"Previous page final image prompt:\n{previous_image_prompt}\n\n"
+            "Preserve continuity with that page, but describe the next page instead of repeating it.\n\n"
         )
 
     prompt_text = (
         "Write one short sentence prompt for a single children's picture-book illustration of this story moment.\n\n"
-        f"Scene description:\n{description_text}\n\n"
+        f"Scene and actor description:\n{description_text}\n\n"
         f"Story moment:\n{part_text}\n\n"
+        f"{previous_page_section}"
         f"{part_role}\n\n"
-        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Aim well below that limit. "
-        "Mention only the main subject, at most two recurring anchor details, and the one new visible event or "
-        "ending change that matters most on this page. Reply only with the final sentence."
+        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Mention the same actor first "
+        "or early, use at most two recurring anchor details only if they help continuity, and focus on the single "
+        "page-defining visible change or settled ending state. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
@@ -188,21 +207,11 @@ def format_story_messages(messages: list[dict[str, Any]]) -> str:
 
 
 def validate_description_text(raw_text: str, config: GenerationConfig) -> str:
-    text = normalize_text(raw_text)
-    if len(text.split()) < config.min_description_words:
-        raise ValidationError(
-            f"Description must contain at least {config.min_description_words} words."
-        )
-    return text
+    return normalize_text(raw_text)
 
 
 def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
-    text = normalize_text(raw_text)
-    if len(text.split()) < config.min_story_part_words:
-        raise ValidationError(
-            f"Story part must contain at least {config.min_story_part_words} words."
-        )
-    return text
+    return normalize_text(raw_text)
 
 
 def validate_image_prompt_text(raw_text: str, config: GenerationConfig) -> str:

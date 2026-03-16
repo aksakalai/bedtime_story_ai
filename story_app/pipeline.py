@@ -178,7 +178,7 @@ class KidStoryPipeline:
             )
             scene_prompt_text = writer.generate_image_prompt(
                 prompt_messages,
-                max_new_tokens=min(self.config.image_prompt_summary_max_tokens, image_prompt_token_limit),
+                max_new_tokens=image_prompt_token_limit,
             )
             scene_prompt_text = validate_image_prompt_text(scene_prompt_text, self.config)
             prompt_text = finalize_image_prompt(self.config, scene_prompt_text)
@@ -424,6 +424,7 @@ class KidStoryPipeline:
         generated_subtitle_paths: list[str] = []
         generated_clip_paths: list[str] = []
         progress_points = [0.92, 0.94, 0.96]
+        previous_image_prompt: str | None = None
 
         for index, part_text in enumerate(story_parts, start=1):
             prompt_messages = build_story_part_image_summary_messages(
@@ -432,10 +433,11 @@ class KidStoryPipeline:
                 part_text=part_text,
                 part_index=index,
                 max_image_prompt_tokens=image_prompt_token_limit,
+                previous_image_prompt=previous_image_prompt,
             )
             scene_prompt_text = writer.generate_image_prompt(
                 prompt_messages,
-                max_new_tokens=min(self.config.image_prompt_summary_max_tokens, image_prompt_token_limit),
+                max_new_tokens=image_prompt_token_limit,
             )
             scene_prompt_text = validate_image_prompt_text(scene_prompt_text, self.config)
             prompt_text = finalize_image_prompt(self.config, scene_prompt_text)
@@ -451,6 +453,7 @@ class KidStoryPipeline:
                 f"[pipeline] part_{index} image prompt token counts: "
                 + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())
             )
+            previous_image_prompt = prompt_text
             prompt_path = prompt_paths[index - 1]
             image_path_for_part = image_paths[index - 1]
             seed = self.config.random_seed + self.config.image_seed_stride + index
