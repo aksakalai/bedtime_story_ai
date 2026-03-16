@@ -14,9 +14,9 @@ DESCRIPTION_SYSTEM_PROMPT = (
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
 
 STORY_SYSTEM_PROMPT = (
-    "You write gentle bedtime-story prose that works like three consecutive children's picture-book pages. Stay "
-    "faithful to the provided scene description and the earlier story parts. Make each part visually distinct and "
-    "easy to illustrate. Reply only with the requested story text. Do not add labels or meta commentary."
+    "You write gentle bedtime-story prose for three consecutive children's picture-book pages. Stay faithful to "
+    "the scene description and earlier parts. Make each part easy to illustrate and clearly different from the "
+    "others. Reply only with the requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
@@ -30,15 +30,15 @@ IMAGE_PROMPT_SYSTEM_PROMPT = (
 )
 
 PART_2_USER_PROMPT = (
-    "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, "
-    "and introduce one noticeable event or visible change that would make the illustration clearly different from "
-    "part 1. Keep it gentle and write about 50 words. Reply only with the story text."
+    "Write only part 2 of the same bedtime story. Continue directly from part 1. Stay grounded in the same scene "
+    "description and introduce one clear visible change or event so this page looks noticeably different from part "
+    "1. Keep it gentle. Write 45 to 55 words in 2 or 3 sentences. Reply only with the story text."
 )
 
 PART_3_USER_PROMPT = (
-    "Write only part 3 of the same bedtime story. Continue directly, stay grounded in the same scene description, "
-    "and conclude with a calm hopeful ending that includes another noticeable visible change showing the settled "
-    "final state. Write about 50 words. Reply only with the story text."
+    "Write only part 3 of the same bedtime story. Continue directly from part 2. Stay grounded in the same scene "
+    "description and conclude with a calm hopeful ending that shows another visible change and the settled final "
+    "state. Write 45 to 55 words in 2 or 3 sentences. Reply only with the story text."
 )
 
 
@@ -71,9 +71,9 @@ def build_story_part_1_prompt(description_text: str) -> str:
     return (
         "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
         f"Scene description:\n{description_text}\n\n"
-        "Keep the story grounded in those visible details, begin with a clear opening picture-book scene, establish "
-        "the setting and main subjects, avoid the main event for now, stay warm and clean, and write about 50 words. "
-        "Reply only with the story text."
+        "Begin with a clear opening picture-book scene. Establish the setting and main subjects. Do not introduce "
+        "the main change yet. Keep it warm and grounded in the visible details. Write 45 to 55 words in 2 or 3 "
+        "sentences. Reply only with the story text."
     )
 
 

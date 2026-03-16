@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-prompt-tuning-v23-20260316"
+APP_BUILD = "phase2-story-prompt-balance-v24-20260316"
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class GenerationConfig:
         "unless those are part of the depicted scene itself. Reply only with the description text."
     )
     description_max_tokens: int = 192
-    story_part_max_tokens: int = 128
+    story_part_max_tokens: int = 160
     image_width: int = 1024
     image_height: int = 1024
     image_num_inference_steps: int = 20
