@@ -41,6 +41,9 @@ class SharedFakeProvider:
         self.description_calls += 1
         return VALID_DESCRIPTION
 
+    def generate_continuity_brief(self, messages):
+        return "The same blue house with a red roof, two green trees, and small blue car stay visually consistent when visible."
+
     def generate_part(self, image_path, messages):
         self.story_calls += 1
         step_index = ((self.story_calls - 1) % 3) + 1
@@ -68,6 +71,9 @@ class PackageFakeProvider:
     def describe(self, image_path, messages):
         self.description_calls += 1
         return VALID_DESCRIPTION
+
+    def generate_continuity_brief(self, messages):
+        return "The same blue house with a red roof, two green trees, and small blue car stay visually consistent when visible."
 
     def generate_part(self, image_path, messages):
         self.story_calls += 1
@@ -102,6 +108,9 @@ class NonEosDescriptionProvider:
     def describe(self, image_path, messages):
         raise ValidationError("Description generation did not finish naturally before the safety limit.")
 
+    def generate_continuity_brief(self, messages):
+        return "The same blue house stays visually consistent when visible."
+
     def generate_part(self, image_path, messages):
         return VALID_PART_1
 
@@ -120,11 +129,31 @@ class NonEosStoryProvider:
     def describe(self, image_path, messages):
         return VALID_DESCRIPTION
 
+    def generate_continuity_brief(self, messages):
+        return "The same blue house stays visually consistent when visible."
+
     def generate_part(self, image_path, messages):
         self.story_calls += 1
         if self.story_calls == 1:
             return VALID_PART_1
         raise ValidationError("Story generation did not finish naturally before the safety limit.")
+
+    def unload(self, clear_cache=False):
+        return None
+
+
+class NonEosContinuityProvider:
+    def __init__(self, config):
+        self.config = config
+
+    def describe(self, image_path, messages):
+        return VALID_DESCRIPTION
+
+    def generate_continuity_brief(self, messages):
+        raise ValidationError("Continuity brief generation did not finish naturally before the safety limit.")
+
+    def generate_part(self, image_path, messages):
+        return VALID_PART_1
 
     def unload(self, clear_cache=False):
         return None
@@ -261,6 +290,17 @@ class PipelineTests(unittest.TestCase):
                 pipeline.create_story_draft(self._create_input_file(root))
             self.assertEqual(NonEosStoryProvider.instances[0].story_calls, 2)
 
+    def test_pipeline_stops_when_continuity_brief_does_not_finish_with_eos(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            pipeline = KidStoryPipeline(
+                config=GenerationConfig(outputs_root=root / "outputs"),
+                describer_factory=NonEosContinuityProvider,
+                writer_factory=NonEosContinuityProvider,
+            )
+            with self.assertRaises(ValidationError):
+                pipeline.create_story_draft(self._create_input_file(root))
+
     def test_pipeline_smoke_path_saves_minimal_story_artifacts(self):
         SharedFakeProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -351,6 +391,15 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(
                 [call["max_new_tokens"] for call in writer.image_prompt_calls],
                 [41, 41, 41],
+            )
+            self.assertEqual(writer.story_calls, 3)
+            self.assertIn(
+                "Continuity brief:",
+                writer.image_prompt_calls[0]["messages"][1]["content"],
+            )
+            self.assertIn(
+                "same blue house with a red roof",
+                writer.image_prompt_calls[0]["messages"][1]["content"],
             )
             self.assertEqual(image_generator.prompt_token_limit_calls, [1])
             self.assertEqual(len(image_generator.validated_prompts), 3)

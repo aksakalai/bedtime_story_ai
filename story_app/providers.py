@@ -232,6 +232,18 @@ class Qwen25VLMultimodalEngine:
             ),
         )
 
+    def generate_continuity_brief(self, messages: list[dict[str, Any]]) -> str:
+        return self._generate_from_messages(
+            image_path=None,
+            messages=messages,
+            max_new_tokens=self.config.story_part_max_tokens,
+            log_prefix="continuity",
+            error_message=(
+                "Continuity brief generation did not finish naturally before the safety limit. "
+                "Increase the continuity token ceiling or tighten the prompt."
+            ),
+        )
+
     def generate_image_prompt(
         self,
         messages: list[dict[str, Any]],

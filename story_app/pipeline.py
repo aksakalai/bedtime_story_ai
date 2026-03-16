@@ -11,12 +11,14 @@ from PIL import Image
 from .assets import prepare_run_paths, write_json, write_text
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
+    build_continuity_brief_messages,
     build_description_prompt,
     build_description_messages,
     build_story_part_image_summary_messages,
     build_story_messages,
     finalize_image_prompt,
     format_story_messages,
+    validate_continuity_brief_text,
     validate_description_text,
     validate_image_prompt_text,
     validate_story_part_text,
@@ -163,8 +165,11 @@ class KidStoryPipeline:
 
             description_messages = build_description_messages(build_description_prompt(self.config))
             describer.describe(warm_image_path, description_messages)
+            continuity_messages = build_continuity_brief_messages(warm_description)
+            warm_continuity_brief = writer.generate_continuity_brief(continuity_messages)
             warm_story_messages = build_story_messages(
                 description_text=warm_description,
+                continuity_brief=warm_continuity_brief,
                 previous_parts=[],
             )
             writer.generate_part(warm_image_path, warm_story_messages)
@@ -172,6 +177,7 @@ class KidStoryPipeline:
             prompt_messages = build_story_part_image_summary_messages(
                 self.config,
                 description_text=warm_description,
+                continuity_brief=warm_continuity_brief,
                 part_text=warm_story_text,
                 part_index=1,
                 max_image_prompt_tokens=image_prompt_token_limit,
@@ -276,7 +282,7 @@ class KidStoryPipeline:
         self,
         image_path: str | Path,
         progress_callback: ProgressCallback | None = None,
-    ) -> tuple[RunPaths, PipelineResult]:
+    ) -> tuple[RunPaths, PipelineResult, str]:
         print("[pipeline] Starting phase-1 story drafting")
         _seed_everything(self.config.random_seed)
         run_paths = prepare_run_paths(image_path, self.config.outputs_root)
@@ -301,10 +307,15 @@ class KidStoryPipeline:
 
         self._notify(progress_callback, 0.35, "Writing part 1")
         writer = self._get_writer()
+        continuity_messages = build_continuity_brief_messages(description_text)
+        raw_continuity_brief = writer.generate_continuity_brief(continuity_messages)
+        continuity_brief = validate_continuity_brief_text(raw_continuity_brief, self.config)
+        print(f"[pipeline] Continuity brief: {continuity_brief}")
         story_parts: list[str] = []
         for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
             messages = build_story_messages(
                 description_text=description_text,
+                continuity_brief=continuity_brief,
                 previous_parts=story_parts,
             )
             raw_output = writer.generate_part(run_paths.input_image_path, messages)
@@ -327,6 +338,7 @@ class KidStoryPipeline:
 
         final_messages = build_story_messages(
             description_text=description_text,
+            continuity_brief=continuity_brief,
             previous_parts=story_parts[:2],
         )
         full_conversation_messages = [
@@ -354,14 +366,14 @@ class KidStoryPipeline:
             part_3_text=story_parts[2],
         )
         print("[pipeline] Story drafting complete")
-        return run_paths, result
+        return run_paths, result, continuity_brief
 
     def create_story_draft(
         self,
         image_path: str | Path,
         progress_callback: ProgressCallback | None = None,
     ) -> PipelineResult:
-        _, result = self._create_story_draft_internal(
+        _, result, _ = self._create_story_draft_internal(
             image_path,
             progress_callback=progress_callback,
         )
@@ -374,7 +386,7 @@ class KidStoryPipeline:
         progress_callback: ProgressCallback | None = None,
     ) -> PipelineResult:
         print("[pipeline] Starting phase-2 storyboard package")
-        run_paths, draft_result = self._create_story_draft_internal(
+        run_paths, draft_result, continuity_brief = self._create_story_draft_internal(
             image_path,
             progress_callback=progress_callback,
         )
@@ -430,6 +442,7 @@ class KidStoryPipeline:
             prompt_messages = build_story_part_image_summary_messages(
                 self.config,
                 description_text=draft_result.description.description_text,
+                continuity_brief=continuity_brief,
                 part_text=part_text,
                 part_index=index,
                 max_image_prompt_tokens=image_prompt_token_limit,
