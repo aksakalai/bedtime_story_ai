@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-image-prompt-soft-guards-v21-20260316"
+APP_BUILD = "phase2-image-prompt-hard-budget-v22-20260316"
 
 
 @dataclass(frozen=True)
