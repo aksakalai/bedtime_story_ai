@@ -11,14 +11,14 @@ from PIL import Image
 from .assets import prepare_run_paths, write_json, write_text
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
-    build_continuity_brief_messages,
-    build_description_prompt,
     build_description_messages,
-    build_story_part_image_summary_messages,
+    build_description_prompt,
+    build_next_part_anchor_messages,
     build_story_messages,
+    build_story_part_image_summary_messages,
     finalize_image_prompt,
     format_story_messages,
-    validate_continuity_brief_text,
+    validate_anchor_text,
     validate_description_text,
     validate_image_prompt_text,
     validate_story_part_text,
@@ -139,9 +139,27 @@ class KidStoryPipeline:
             buffer_tokens=self.config.image_prompt_token_buffer,
         )
 
-        warm_description = "A small blue house rests under a bright moon beside two quiet trees."
-        warm_story_text = (
-            "A little blue house glows softly under the stars while the trees sway and the night feels calm and safe."
+        warm_anchor_1 = (
+            "actor: curious little blue fish\n"
+            "actor_colors: blue and purple\n"
+            "actor_traits: bright eyes, long flowing fins\n"
+            "scene: underwater garden\n"
+            "scene_colors: teal water, green sea plants, sandy floor\n"
+            "object_1: sea plants\n"
+            "object_1_colors: green\n"
+            "object_2: coral arch\n"
+            "object_2_colors: orange\n"
+            "object_3: none\n"
+            "object_3_colors: none\n"
+            "secondary_actor: none\n"
+            "secondary_actor_colors: none\n"
+            "page_event: calm exploration\n"
+            "mood: peaceful and curious"
+        )
+        warm_part_1 = (
+            "A curious little blue fish with purple shimmer swam through the underwater garden beside the green sea "
+            "plants. The orange coral arch glowed softly nearby while the water stayed calm and bright. The little "
+            "fish slowed down as if it had just noticed something new ahead."
         )
 
         with tempfile.TemporaryDirectory(prefix="bedtime_story_ai_warmup_") as temp_dir_name:
@@ -159,23 +177,25 @@ class KidStoryPipeline:
                 color=(245, 241, 231),
             ).save(warm_image_path)
 
-            description_messages = build_description_messages(build_description_prompt(self.config))
-            describer.describe(warm_image_path, description_messages)
-            continuity_messages = build_continuity_brief_messages(warm_description)
-            raw_warm_continuity_brief = writer.generate_continuity_brief(continuity_messages)
-            warm_continuity_brief = validate_continuity_brief_text(raw_warm_continuity_brief, self.config)
-            warm_story_messages = build_story_messages(
-                description_text=warm_description,
-                continuity_brief=warm_continuity_brief,
+            initial_anchor_messages = build_description_messages(build_description_prompt(self.config))
+            describer.extract_initial_anchor(warm_image_path, initial_anchor_messages)
+            story_messages = build_story_messages(
+                part_index=1,
+                current_anchor_text=warm_anchor_1,
+                previous_anchors=[],
                 previous_parts=[],
             )
-            writer.generate_part(warm_image_path, warm_story_messages)
+            writer.generate_part(warm_image_path, story_messages)
+            next_anchor_messages = build_next_part_anchor_messages(
+                current_anchor_text=warm_anchor_1,
+                latest_part_text=warm_part_1,
+                next_part_index=2,
+            )
+            writer.generate_next_anchor(next_anchor_messages)
 
             prompt_messages = build_story_part_image_summary_messages(
                 self.config,
-                description_text=warm_description,
-                continuity_brief=warm_continuity_brief,
-                part_text=warm_story_text,
+                page_anchor_text=warm_anchor_1,
                 part_index=1,
                 max_image_prompt_tokens=image_prompt_token_limit,
             )
@@ -190,9 +210,7 @@ class KidStoryPipeline:
                 buffer_tokens=self.config.image_prompt_token_buffer,
                 strict=True,
             )
-            print(
-                f"[warmup] Image prompt token limit: {image_prompt_token_limit}"
-            )
+            print(f"[warmup] Image prompt token limit: {image_prompt_token_limit}")
             print(
                 "[warmup] Image prompt token counts: "
                 + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())
@@ -204,12 +222,12 @@ class KidStoryPipeline:
                 output_path=warm_generated_image_path,
             )
             audio_output_path, duration_seconds = narrator.narrate(
-                text=warm_story_text,
+                text=warm_part_1,
                 output_path=warm_audio_path,
             )
             whisper_words = word_aligner.transcribe_words(audio_output_path)
             timed_tokens = align_story_text_to_timestamps(
-                display_text=warm_story_text,
+                display_text=warm_part_1,
                 whisper_words=whisper_words,
                 fallback_total_duration=duration_seconds,
             )
@@ -246,7 +264,7 @@ class KidStoryPipeline:
                 describer.unload(clear_cache=True)
             except TypeError:
                 describer.unload()
-        if writer is not None and writer is not describer:
+        if writer is not None:
             try:
                 writer.unload(clear_cache=True)
             except TypeError:
@@ -279,70 +297,91 @@ class KidStoryPipeline:
         self,
         image_path: str | Path,
         progress_callback: ProgressCallback | None = None,
-    ) -> tuple[RunPaths, PipelineResult, str]:
+    ) -> tuple[RunPaths, PipelineResult, list[str]]:
         print("[pipeline] Starting phase-1 story drafting")
         _seed_everything(self.config.random_seed)
         run_paths = prepare_run_paths(image_path, self.config.outputs_root)
         print(f"[pipeline] Run directory: {run_paths.run_dir}")
 
-        self._notify(progress_callback, 0.1, "Describing the drawing")
-        description_prompt = build_description_prompt(self.config)
-        write_text(run_paths.description_prompt_path, description_prompt)
-        description_messages = build_description_messages(description_prompt)
+        self._notify(progress_callback, 0.08, "Extracting page 1 anchors")
+        prompt_text = build_description_prompt(self.config)
+        write_text(run_paths.description_prompt_path, prompt_text)
+        initial_anchor_messages = build_description_messages(prompt_text)
 
         describer = self._get_describer()
-        raw_description = describer.describe(run_paths.input_image_path, description_messages)
-        description_text = validate_description_text(raw_description, self.config)
+        writer = self._get_writer()
+        raw_initial_anchor = describer.extract_initial_anchor(run_paths.input_image_path, initial_anchor_messages)
+        initial_anchor_text = validate_description_text(raw_initial_anchor, self.config)
+        write_text(run_paths.description_path, initial_anchor_text)
+        write_text(run_paths.story_part_1_anchor_path, initial_anchor_text)
 
-        write_text(run_paths.description_path, description_text)
         description = DescriptionResult(
             image_path=str(run_paths.input_image_path.resolve()),
-            prompt_text=description_prompt,
-            description_text=description_text,
+            prompt_text=prompt_text,
+            description_text=initial_anchor_text,
         )
-        print(f"[pipeline] Description: {description_text}")
+        print(f"[pipeline] part_1 anchor:\n{initial_anchor_text}")
 
-        self._notify(progress_callback, 0.35, "Writing part 1")
-        writer = self._get_writer()
-        continuity_messages = build_continuity_brief_messages(description_text)
-        raw_continuity_brief = writer.generate_continuity_brief(continuity_messages)
-        continuity_brief = validate_continuity_brief_text(raw_continuity_brief, self.config)
-        print(f"[pipeline] Continuity brief: {continuity_brief}")
+        page_anchors = [initial_anchor_text]
         story_parts: list[str] = []
-        for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
-            messages = build_story_messages(
-                description_text=description_text,
-                continuity_brief=continuity_brief,
+        transcript_messages: list[dict[str, Any]] = []
+
+        for part_index in range(1, 4):
+            if part_index == 1:
+                self._notify(progress_callback, 0.25, "Writing part 1")
+            elif part_index == 2:
+                self._notify(progress_callback, 0.45, "Writing part 2")
+            else:
+                self._notify(progress_callback, 0.65, "Writing part 3")
+
+            story_messages = build_story_messages(
+                part_index=part_index,
+                current_anchor_text=page_anchors[-1],
+                previous_anchors=page_anchors[:-1],
                 previous_parts=story_parts,
             )
-            raw_output = writer.generate_part(run_paths.input_image_path, messages)
-            output_text = validate_story_part_text(raw_output, self.config)
-            story_parts.append(output_text)
-            if step_name == "part_1":
+            raw_story_part = writer.generate_part(run_paths.input_image_path, story_messages)
+            story_part_text = validate_story_part_text(raw_story_part, self.config)
+            story_parts.append(story_part_text)
+
+            if not transcript_messages:
+                transcript_messages.extend(story_messages)
+            else:
+                transcript_messages.append(story_messages[1])
+            transcript_messages.append({"role": "assistant", "content": story_part_text})
+
+            if part_index == 1:
                 story_path = run_paths.story_part_1_path
-            elif step_name == "part_2":
+            elif part_index == 2:
                 story_path = run_paths.story_part_2_path
             else:
                 story_path = run_paths.story_part_3_path
-            write_text(story_path, output_text)
+            write_text(story_path, story_part_text)
             print(
-                f"[pipeline] {step_name} stats: "
-                f"words={len(output_text.split())}, "
-                f"chars={len(output_text)}"
+                f"[pipeline] part_{part_index} stats: "
+                f"words={len(story_part_text.split())}, "
+                f"chars={len(story_part_text)}"
             )
-            print(f"[pipeline] {step_name} output: {output_text}")
-            self._notify(progress_callback, 0.35 + (index * 0.18), f"Generated {step_name}")
+            print(f"[pipeline] part_{part_index} output: {story_part_text}")
 
-        final_messages = build_story_messages(
-            description_text=description_text,
-            continuity_brief=continuity_brief,
-            previous_parts=story_parts[:2],
-        )
-        full_conversation_messages = [
-            *final_messages,
-            {"role": "assistant", "content": story_parts[2]},
-        ]
-        full_conversation_text = format_story_messages(full_conversation_messages)
+            if part_index < 3:
+                next_anchor_messages = build_next_part_anchor_messages(
+                    current_anchor_text=page_anchors[-1],
+                    latest_part_text=story_part_text,
+                    next_part_index=part_index + 1,
+                )
+                raw_next_anchor = writer.generate_next_anchor(next_anchor_messages)
+                next_anchor_text = validate_anchor_text(raw_next_anchor, self.config)
+                page_anchors.append(next_anchor_text)
+                next_anchor_path = (
+                    run_paths.story_part_2_anchor_path
+                    if part_index == 1
+                    else run_paths.story_part_3_anchor_path
+                )
+                write_text(next_anchor_path, next_anchor_text)
+                print(f"[pipeline] part_{part_index + 1} anchor:\n{next_anchor_text}")
+
+        full_conversation_text = format_story_messages(transcript_messages)
         write_text(run_paths.story_conversation_path, full_conversation_text)
 
         draft = StoryDraft(
@@ -361,9 +400,12 @@ class KidStoryPipeline:
             part_1_text=story_parts[0],
             part_2_text=story_parts[1],
             part_3_text=story_parts[2],
+            story_part_1_anchor_path=str(run_paths.story_part_1_anchor_path.resolve()),
+            story_part_2_anchor_path=str(run_paths.story_part_2_anchor_path.resolve()),
+            story_part_3_anchor_path=str(run_paths.story_part_3_anchor_path.resolve()),
         )
         print("[pipeline] Story drafting complete")
-        return run_paths, result, continuity_brief
+        return run_paths, result, page_anchors
 
     def create_story_draft(
         self,
@@ -383,7 +425,7 @@ class KidStoryPipeline:
         progress_callback: ProgressCallback | None = None,
     ) -> PipelineResult:
         print("[pipeline] Starting phase-2 storyboard package")
-        run_paths, draft_result, continuity_brief = self._create_story_draft_internal(
+        run_paths, draft_result, page_anchors = self._create_story_draft_internal(
             image_path,
             progress_callback=progress_callback,
         )
@@ -395,11 +437,17 @@ class KidStoryPipeline:
         image_prompt_token_limit = image_generator.get_prompt_token_limit(
             buffer_tokens=self.config.image_prompt_token_buffer,
         )
-        self._notify(progress_callback, 0.9, "Generating storyboard images")
+        self._notify(progress_callback, 0.84, "Generating storyboard images")
+
         story_parts = [
             draft_result.part_1_text,
             draft_result.part_2_text,
             draft_result.part_3_text,
+        ]
+        anchor_paths = [
+            run_paths.story_part_1_anchor_path,
+            run_paths.story_part_2_anchor_path,
+            run_paths.story_part_3_anchor_path,
         ]
         prompt_paths = [
             run_paths.image_prompt_part_1_path,
@@ -426,24 +474,21 @@ class KidStoryPipeline:
             run_paths.story_part_2_clip_path,
             run_paths.story_part_3_clip_path,
         ]
+
         generated_prompt_paths: list[str] = []
         generated_image_paths: list[str] = []
         manifest_parts: list[StoryboardManifestPart] = []
         generated_audio_paths: list[str] = []
         generated_subtitle_paths: list[str] = []
         generated_clip_paths: list[str] = []
-        progress_points = [0.92, 0.94, 0.96]
-        previous_image_prompt: str | None = None
+        progress_points = [0.88, 0.91, 0.94]
 
-        for index, part_text in enumerate(story_parts, start=1):
+        for index, page_anchor_text in enumerate(page_anchors, start=1):
             prompt_messages = build_story_part_image_summary_messages(
                 self.config,
-                description_text=draft_result.description.description_text,
-                continuity_brief=continuity_brief,
-                part_text=part_text,
+                page_anchor_text=page_anchor_text,
                 part_index=index,
                 max_image_prompt_tokens=image_prompt_token_limit,
-                previous_image_prompt=previous_image_prompt,
             )
             scene_prompt_text = writer.generate_image_prompt(
                 prompt_messages,
@@ -456,14 +501,12 @@ class KidStoryPipeline:
                 buffer_tokens=self.config.image_prompt_token_buffer,
                 strict=True,
             )
-            print(
-                f"[pipeline] part_{index} image prompt token limit: {image_prompt_token_limit}"
-            )
+            print(f"[pipeline] part_{index} image prompt token limit: {image_prompt_token_limit}")
             print(
                 f"[pipeline] part_{index} image prompt token counts: "
                 + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())
             )
-            previous_image_prompt = prompt_text
+
             prompt_path = prompt_paths[index - 1]
             image_path_for_part = image_paths[index - 1]
             seed = self.config.random_seed + self.config.image_seed_stride + index
@@ -480,10 +523,12 @@ class KidStoryPipeline:
             manifest_parts.append(
                 StoryboardManifestPart(
                     index=index,
-                    text=part_text,
+                    text=story_parts[index - 1],
+                    anchor_text=page_anchor_text,
                     image_prompt=prompt_text,
                     seed=seed,
                     image_path=str(output_path.resolve()),
+                    anchor_path=str(anchor_paths[index - 1].resolve()),
                 )
             )
             self._notify(
@@ -492,8 +537,8 @@ class KidStoryPipeline:
                 f"Generated image for part {index}",
             )
 
-        self._notify(progress_callback, 0.965, "Generating narration")
-        narration_progress_points = [0.972, 0.978, 0.984]
+        self._notify(progress_callback, 0.955, "Generating narration")
+        narration_progress_points = [0.965, 0.972, 0.979]
         for index, part_text in enumerate(story_parts, start=1):
             audio_output_path, duration_seconds = narrator.narrate(
                 text=part_text,
@@ -504,9 +549,11 @@ class KidStoryPipeline:
             manifest_parts[index - 1] = StoryboardManifestPart(
                 index=manifest_parts[index - 1].index,
                 text=manifest_parts[index - 1].text,
+                anchor_text=manifest_parts[index - 1].anchor_text,
                 image_prompt=manifest_parts[index - 1].image_prompt,
                 seed=manifest_parts[index - 1].seed,
                 image_path=manifest_parts[index - 1].image_path,
+                anchor_path=manifest_parts[index - 1].anchor_path,
                 audio_path=resolved_audio_path,
                 audio_duration_seconds=duration_seconds,
             )
@@ -516,8 +563,8 @@ class KidStoryPipeline:
                 f"Generated narration for part {index}",
             )
 
-        self._notify(progress_callback, 0.986, "Aligning narration and building overlays")
-        overlay_progress_points = [0.989, 0.993, 0.996]
+        self._notify(progress_callback, 0.982, "Aligning narration and building overlays")
+        overlay_progress_points = [0.988, 0.993, 0.997]
         for index, part_text in enumerate(story_parts, start=1):
             resolved_audio_path = generated_audio_paths[index - 1]
             whisper_words = word_aligner.transcribe_words(resolved_audio_path)
@@ -546,9 +593,11 @@ class KidStoryPipeline:
             manifest_parts[index - 1] = StoryboardManifestPart(
                 index=manifest_parts[index - 1].index,
                 text=manifest_parts[index - 1].text,
+                anchor_text=manifest_parts[index - 1].anchor_text,
                 image_prompt=manifest_parts[index - 1].image_prompt,
                 seed=manifest_parts[index - 1].seed,
                 image_path=manifest_parts[index - 1].image_path,
+                anchor_path=manifest_parts[index - 1].anchor_path,
                 audio_path=manifest_parts[index - 1].audio_path,
                 audio_duration_seconds=manifest_parts[index - 1].audio_duration_seconds,
                 subtitle_path=str(subtitle_path.resolve()),
@@ -579,6 +628,9 @@ class KidStoryPipeline:
 
         return replace(
             draft_result,
+            story_part_1_anchor_path=str(run_paths.story_part_1_anchor_path.resolve()),
+            story_part_2_anchor_path=str(run_paths.story_part_2_anchor_path.resolve()),
+            story_part_3_anchor_path=str(run_paths.story_part_3_anchor_path.resolve()),
             image_prompt_part_1_path=generated_prompt_paths[0],
             image_prompt_part_2_path=generated_prompt_paths[1],
             image_prompt_part_3_path=generated_prompt_paths[2],

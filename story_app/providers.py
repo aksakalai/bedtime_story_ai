@@ -201,22 +201,23 @@ class Qwen25VLMultimodalEngine:
             f"ended_with_eos={ended_with_eos}"
         )
         print(f"[{log_prefix}] Output word count: {len(decoded.split())}")
-        preview = decoded[:240] if log_prefix == "describe" else decoded[-120:]
-        label = "Output preview" if log_prefix == "describe" else "Output tail preview"
+        preview_prefixes = {"describe", "initial_anchor"}
+        preview = decoded[:240] if log_prefix in preview_prefixes else decoded[-120:]
+        label = "Output preview" if log_prefix in preview_prefixes else "Output tail preview"
         print(f"[{log_prefix}] {label}: {preview}")
         if not ended_with_eos:
             raise ValidationError(error_message)
         return decoded
 
-    def describe(self, image_path: str | Path, messages: list[dict[str, Any]]) -> str:
+    def extract_initial_anchor(self, image_path: str | Path, messages: list[dict[str, Any]]) -> str:
         return self._generate_from_messages(
             image_path=image_path,
             messages=messages,
-            max_new_tokens=self.config.description_max_tokens,
-            log_prefix="describe",
+            max_new_tokens=self.config.initial_anchor_max_tokens,
+            log_prefix="initial_anchor",
             error_message=(
-                "Description generation did not finish naturally before the safety limit. "
-                "Increase the description token ceiling or tighten the prompt."
+                "Initial anchor generation did not finish naturally before the safety limit. "
+                "Increase the anchor token ceiling or tighten the prompt."
             ),
         )
 
@@ -232,17 +233,23 @@ class Qwen25VLMultimodalEngine:
             ),
         )
 
-    def generate_continuity_brief(self, messages: list[dict[str, Any]]) -> str:
+    def generate_next_anchor(self, messages: list[dict[str, Any]]) -> str:
         return self._generate_from_messages(
             image_path=None,
             messages=messages,
-            max_new_tokens=self.config.continuity_brief_max_tokens,
-            log_prefix="continuity",
+            max_new_tokens=self.config.anchor_update_max_tokens,
+            log_prefix="anchor_update",
             error_message=(
-                "Continuity brief generation did not finish naturally before the safety limit. "
-                "Increase the continuity token ceiling or tighten the prompt."
+                "Next-page anchor generation did not finish naturally before the safety limit. "
+                "Increase the anchor token ceiling or tighten the prompt."
             ),
         )
+
+    def describe(self, image_path: str | Path, messages: list[dict[str, Any]]) -> str:
+        return self.extract_initial_anchor(image_path, messages)
+
+    def generate_continuity_brief(self, messages: list[dict[str, Any]]) -> str:
+        return self.generate_next_anchor(messages)
 
     def generate_image_prompt(
         self,

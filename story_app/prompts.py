@@ -6,68 +6,58 @@ from typing import Any
 from .config import GenerationConfig
 from .schemas import ValidationError
 
+ANCHOR_FIELDS = [
+    "actor",
+    "actor_colors",
+    "actor_traits",
+    "scene",
+    "scene_colors",
+    "object_1",
+    "object_1_colors",
+    "object_2",
+    "object_2_colors",
+    "object_3",
+    "object_3_colors",
+    "secondary_actor",
+    "secondary_actor_colors",
+    "page_event",
+    "mood",
+]
+
 DESCRIPTION_SYSTEM_PROMPT = (
-    "You carefully observe the image and follow the current request. Write only one grounded prose paragraph that "
-    "defines the scene and one central actor for a children's story. If a notable character is clearly present, use "
-    "that character as the actor. If no notable character is clearly present, invent one fitting scene-related actor "
-    "using a descriptive role instead of a proper name. The paragraph must explicitly state who that actor is and "
-    "what defining visual traits make that actor recognizable. Treat the depicted content as a real scene, not as a "
-    "drawing or uploaded image. Never mention the image, picture, drawing, illustration, sketch, painting, child "
-    "art, paper, style, artist, or composition. Do not add labels or meta commentary."
+    "You observe one uploaded scene and convert it into one compact page anchor sheet for a children's story. Treat "
+    "the depicted content as a real scene, never as a drawing, picture, sketch, illustration, painting, or child "
+    "art. Extract one central actor and explicit colors for the actor, the scene, and important objects whenever "
+    "visible. If no clear actor exists, create one fitting simple actor for the scene, such as a child, bunny, "
+    "fish, duckling, fox, or similar gentle character. Reply only with the exact anchor sheet."
 )
 
-DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
+DESCRIPTION_USER_PROMPT_SUFFIX = "Reply only with the anchor sheet text."
 
-CONTINUITY_BRIEF_SYSTEM_PROMPT = (
-    "You turn a scene-and-actor description into one tiny continuity brief for recurring visual consistency across "
-    "three children's picture-book pages. Reply with one compact line only, not a paragraph. Name the actor first "
-    "as one full descriptive phrase, then list only the few recurring anchors that should stay visually the same "
-    "when visible. Use concrete colors and identities only when the description already gives them. Never reduce "
-    "specific details to bare nouns if the description gives stronger visual attributes. Do not rewrite the full "
-    "scene description. Use only real scene terms, never image-medium terms. Reply only with the continuity brief "
-    "text."
+ANCHOR_UPDATE_SYSTEM_PROMPT = (
+    "You update one compact page anchor sheet for the next page of the same bedtime story. Treat all anchors as real "
+    "scene facts, never as image-medium descriptions. Keep the same actor identity unless the latest story part "
+    "clearly changes it. Keep actor colors, object colors, and scene colors consistent unless the latest story part "
+    "clearly changes them. Output one full next-page anchor sheet with the exact same keys, not a diff."
 )
 
 STORY_SYSTEM_PROMPT = (
-    "You write gentle bedtime-story prose for three consecutive children's picture-book pages that follow the same "
-    "central actor across one simple story arc. Stay faithful to the scene-and-actor description, to the continuity "
-    "brief if one is provided, and to earlier parts. Treat the continuity brief as required visual canon. In every "
-    "part, naturally repeat the actor's defining appearance and any visible canon anchors so the illustrations can "
-    "stay consistent. Part 1 introduces the scene and actor. Part 2 introduces one visible event, mystery, or "
-    "noticeable change affecting that actor. Part 3 resolves that same event with a calm hopeful ending. If the "
-    "setting shifts, move only to a directly related nearby place from the previous page. Keep the actor consistent, "
-    "keep the prose concise, do not rename the actor, and do not introduce proper names unless the description "
-    "already uses one. Treat the story world as real and never refer to an image, picture, drawing, illustration, "
-    "sketch, painting, child art, or how the source looked on the page. Reply only with the requested story text."
+    "You write gentle bedtime-story prose for three consecutive children's picture-book pages. The current page "
+    "anchor is the source of truth for what should be visible on this page. Earlier anchors and story parts are only "
+    "for continuity. Keep the same central actor across the story unless the anchors explicitly change that. Reuse "
+    "the actor identity, actor colors, scene, and named objects naturally in the prose so the illustrations stay "
+    "consistent. Part 1 sets up the actor and scene. Part 2 introduces one visible event, mystery, or clear change. "
+    "Part 3 resolves that event with a calm ending. Treat the story world as real and never mention an image, "
+    "picture, drawing, illustration, sketch, painting, child art, paper, artist, or style. Reply only with the "
+    "requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
-    "You turn one bedtime-story moment into one very short image prompt sentence for a CLIP-limited image model. "
-    "The image should feel like a children's picture-book illustration. Reply with one short sentence only. Keep "
-    "the same central actor and story continuity, but describe only what must be visible on this page. You may also "
-    "receive a continuity brief that locks the actor phrase and recurring anchors. If the actor is visible here, "
-    "reuse that actor phrase nearly verbatim. If one of those anchors is visible here, preserve its same described "
-    "color and identity instead of redesigning it. Mention the actor first or early, keep recurring anchors to a "
-    "bare minimum, and highlight the one visible event, mystery, or resolved state that makes this page different. "
-    "Do not restage the previous page, restate the whole scene description, or list every object. Do not add camera "
-    "terms, artist names, text, captions, logos, watermarks, borders, frames, panels, or extra unrelated details. "
-    "Do not describe the scene as a drawing, sketch, or picture inside the prompt."
-)
-
-PART_2_USER_PROMPT = (
-    "Write only part 2 of the same bedtime story. Continue directly from part 1. Keep following the same central "
-    "actor, and introduce one visible event, mystery, or noticeable change that affects that actor and makes this "
-    "page look clearly different from part 1. If the setting shifts, move only to a directly related nearby place "
-    "from part 1. Naturally repeat the actor's defining appearance and any visible canon anchors again. Do not "
-    "resolve the event yet. Use exactly 3 short sentences. Reply only with the story text."
-)
-
-PART_3_USER_PROMPT = (
-    "Write only part 3 of the same bedtime story. Continue directly from part 2. Keep following the same central "
-    "actor, resolve the same event or change from part 2, and show the calm final state that makes this page look "
-    "clearly different from part 2. If the setting shifts, move only to a directly related nearby place from part "
-    "2. Naturally repeat the actor's defining appearance and any visible canon anchors again. Use exactly 3 short "
-    "sentences. Reply only with the story text."
+    "You turn one page anchor into one very short image prompt sentence for a CLIP-limited image model. The anchor "
+    "is the source of truth for what should be visible. Mention the actor early, preserve the actor colors and object "
+    "colors exactly when they are present, and describe only the current page snapshot. Treat the content as a real "
+    "scene. Never describe it as a drawing, picture, sketch, or illustration inside the prompt sentence. Reply only "
+    "with one short sentence."
 )
 
 
@@ -78,8 +68,23 @@ def normalize_text(raw_text: str) -> str:
     return text
 
 
+def normalize_multiline_text(raw_text: str) -> str:
+    text = raw_text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        raise ValidationError("Model output was empty.")
+
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.split("\n")]
+    lines = [line for line in lines if line]
+    if not lines:
+        raise ValidationError("Model output was empty.")
+    return "\n".join(lines)
+
+
 def build_description_prompt(config: GenerationConfig) -> str:
-    return config.description_prompt_prefix
+    prompt = config.description_prompt_prefix.rstrip()
+    if not prompt.endswith(DESCRIPTION_USER_PROMPT_SUFFIX.strip()):
+        prompt = f"{prompt} {DESCRIPTION_USER_PROMPT_SUFFIX}"
+    return prompt
 
 
 def build_image_text_content(prompt_text: str) -> list[dict[str, str]]:
@@ -96,133 +101,124 @@ def build_description_messages(prompt_text: str) -> list[dict[str, Any]]:
     ]
 
 
-def build_continuity_brief_messages(description_text: str) -> list[dict[str, Any]]:
+def build_next_part_anchor_messages(
+    *,
+    current_anchor_text: str,
+    latest_part_text: str,
+    next_part_index: int,
+) -> list[dict[str, Any]]:
+    if next_part_index == 2:
+        update_goal = (
+            "Write the full anchor sheet for part 2. The next page should show one visible event, mystery, or clear "
+            "change affecting the same actor."
+        )
+    else:
+        update_goal = (
+            "Write the full anchor sheet for part 3. The next page should show the calm resolved state of the same "
+            "event."
+        )
+
     prompt_text = (
-        "Write one tiny continuity brief based on the scene-and-actor description below.\n\n"
-        f"Scene and actor description:\n{description_text}\n\n"
-        "Reply in exactly this compact format:\n"
-        "actor: <full actor phrase>; anchors: <anchor phrase 1>, <anchor phrase 2>, <anchor phrase 3>\n\n"
-        "The actor phrase must include the actor's defining visual traits if the description gives them, such as "
-        "color, species, clothing, size, or other distinctive appearance details. Each anchor must be a short noun "
-        "phrase with its defining color or identity if the description gives one. Avoid vague anchors like fish, "
-        "house, scales, plants, sky, sun, or current on their own when stronger phrases are available. Keep it very "
-        "concise and do not rewrite the whole scene. Use only real scene terms, never image-medium terms. Reply only "
-        "with the continuity brief text."
+        f"Current page anchor:\n{current_anchor_text}\n\n"
+        f"Latest story part:\n{latest_part_text}\n\n"
+        f"{update_goal}\n"
+        "Carry forward the same actor identity and the same colors unless the latest story part clearly changes them. "
+        "If the scene shifts, move only to a directly related nearby place. If a new important object or secondary "
+        "actor appears, include it. Output exactly these keys in this exact order, using `none` when needed:\n"
+        + "\n".join(f"{field}:" for field in ANCHOR_FIELDS)
+        + "\nReply only with the full next-page anchor sheet."
     )
     return [
-        {"role": "system", "content": CONTINUITY_BRIEF_SYSTEM_PROMPT},
+        {"role": "system", "content": ANCHOR_UPDATE_SYSTEM_PROMPT},
         {"role": "user", "content": prompt_text},
     ]
 
 
-def build_story_part_1_prompt(description_text: str, continuity_brief: str) -> str:
+def _format_anchor_history(previous_anchors: list[str]) -> str:
+    if not previous_anchors:
+        return ""
+    sections = [
+        f"Earlier page {index} anchor:\n{anchor_text}"
+        for index, anchor_text in enumerate(previous_anchors, start=1)
+    ]
+    return "\n\n".join(sections) + "\n\n"
+
+
+def _format_story_history(previous_parts: list[str]) -> str:
+    if not previous_parts:
+        return ""
+    sections = [
+        f"Earlier story part {index}:\n{part_text}"
+        for index, part_text in enumerate(previous_parts, start=1)
+    ]
+    return "\n\n".join(sections) + "\n\n"
+
+
+def build_story_part_1_prompt(current_anchor_text: str) -> str:
     return (
-        "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
-        f"Scene and actor description:\n{description_text}\n\n"
-        f"Continuity brief:\n{continuity_brief}\n\n"
-        "Open with the same central actor in the described setting. Establish who the actor is, where they are, and "
-        "the calm mood of the page. Naturally repeat the actor phrase and any visible canon anchors. Let the actor "
-        "notice or approach something gentle, but do not start the main event yet. Keep it warm, concrete, easy to "
-        "illustrate, concise, and make each sentence short. Treat the scene as real and never mention drawings, "
-        "pictures, illustrations, sketches, paintings, or child art. Use exactly 3 short sentences. Reply only with "
-        "the story text."
+        "Current page anchor for part 1:\n"
+        f"{current_anchor_text}\n\n"
+        "Write only part 1 of the bedtime story. Introduce the actor, scene, and named objects from this anchor. "
+        "Keep the mood calm and warm. Do not start the main event yet. Use exactly 3 short sentences. Reply only "
+        "with the story text."
     )
 
 
 def build_story_messages(
     *,
-    description_text: str,
-    continuity_brief: str,
+    part_index: int,
+    current_anchor_text: str,
+    previous_anchors: list[str],
     previous_parts: list[str],
 ) -> list[dict[str, Any]]:
-    messages: list[dict[str, Any]] = [
+    if part_index == 1:
+        user_prompt = build_story_part_1_prompt(current_anchor_text)
+    else:
+        history_section = _format_anchor_history(previous_anchors) + _format_story_history(previous_parts)
+        if part_index == 2:
+            part_goal = (
+                "Write only part 2 of the bedtime story. Continue directly from part 1. Use the current page anchor "
+                "as the source of truth. Introduce one visible event, mystery, or clear change affecting the actor. "
+                "Use exactly 3 short sentences."
+            )
+        else:
+            part_goal = (
+                "Write only part 3 of the bedtime story. Continue directly from the earlier parts. Use the current "
+                "page anchor as the source of truth. Resolve the same event with a calm ending. Use exactly 3 short "
+                "sentences."
+            )
+        user_prompt = (
+            f"{history_section}"
+            f"Current page anchor for part {part_index}:\n{current_anchor_text}\n\n"
+            f"{part_goal} Reply only with the story text."
+        )
+
+    return [
         {"role": "system", "content": STORY_SYSTEM_PROMPT},
-        {"role": "user", "content": build_story_part_1_prompt(description_text, continuity_brief)},
+        {"role": "user", "content": user_prompt},
     ]
-
-    if not previous_parts:
-        return messages
-
-    messages.append({"role": "assistant", "content": previous_parts[0]})
-
-    if len(previous_parts) == 1:
-        messages.append({"role": "user", "content": _build_story_followup_prompt(PART_2_USER_PROMPT, continuity_brief)})
-        return messages
-
-    messages.append({"role": "user", "content": _build_story_followup_prompt(PART_2_USER_PROMPT, continuity_brief)})
-    messages.append({"role": "assistant", "content": previous_parts[1]})
-    messages.append({"role": "user", "content": _build_story_followup_prompt(PART_3_USER_PROMPT, continuity_brief)})
-    return messages
-
-
-def _build_story_followup_prompt(base_prompt: str, continuity_brief: str) -> str:
-    return f"Continuity brief:\n{continuity_brief}\n\n{base_prompt}"
-
-
-def build_story_part_image_prompt(
-    config: GenerationConfig,
-    *,
-    description_text: str,
-    part_text: str,
-) -> str:
-    return (
-        "Create one single polished storybook illustration for this exact bedtime story moment. "
-        f"Scene grounding: {description_text} "
-        f"Story moment: {part_text} "
-        "Show only one continuous scene from this moment, keep the setting and characters consistent across parts, "
-        "and avoid adding unrelated objects or extra characters. "
-        f"{config.image_prompt_style_suffix}"
-    )
 
 
 def build_story_part_image_summary_messages(
     config: GenerationConfig,
     *,
-    description_text: str,
-    continuity_brief: str,
-    part_text: str,
+    page_anchor_text: str,
     part_index: int,
     max_image_prompt_tokens: int,
-    previous_image_prompt: str | None = None,
 ) -> list[dict[str, Any]]:
     if part_index == 1:
-        part_role = (
-            "This is part 1, so establish the actor in the opening scene and make the clearest recurring anchors "
-            "easy to recognize."
-        )
+        part_role = "This is page 1, so show the opening setup clearly."
     elif part_index == 2:
-        part_role = (
-            "This is part 2, so keep the same actor and make the new visible event or change the main focus."
-        )
+        part_role = "This is page 2, so show the event or change clearly."
     else:
-        part_role = (
-            "This is part 3, so keep the same actor and make the resolved final state the main focus."
-        )
-
-    previous_page_section = ""
-    if previous_image_prompt is not None:
-        previous_page_section = (
-            f"Previous page final image prompt:\n{previous_image_prompt}\n\n"
-            "Preserve continuity with that page, but describe the next page instead of repeating it.\n\n"
-        )
-
-    continuity_section = ""
-    if continuity_brief:
-        continuity_section = f"Continuity brief:\n{continuity_brief}\n\n"
+        part_role = "This is page 3, so show the resolved ending clearly."
 
     prompt_text = (
-        "Write one short sentence prompt for a single children's picture-book illustration of this story moment.\n\n"
-        f"Scene and actor description:\n{description_text}\n\n"
-        f"{continuity_section}"
-        f"Story moment:\n{part_text}\n\n"
-        f"{previous_page_section}"
-        f"{part_role}\n\n"
-        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Mention the same actor first "
-        "or early, and if the actor is visible, reuse the actor phrase from the continuity brief instead of a looser "
-        "substitute. Use at most two recurring anchor details only if they help continuity, and if a recurring "
-        "anchor from the continuity brief is visible on this page, keep its same described color and identity. Keep "
-        "the sentence extremely concise, do not echo the full scene description, and focus on the single page-"
-        "defining visible change or settled ending state. Reply only with the final sentence."
+        f"Current page anchor:\n{page_anchor_text}\n\n"
+        f"{part_role}\n"
+        f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Mention the actor early. Keep "
+        "the actor colors, scene colors, and object colors exactly when they are present. Use only the current page "
+        "anchor, not any previous story text. Keep it extremely concise. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
@@ -265,14 +261,14 @@ def format_story_messages(messages: list[dict[str, Any]]) -> str:
 
 
 def validate_description_text(raw_text: str, config: GenerationConfig) -> str:
-    return normalize_text(raw_text)
+    return normalize_multiline_text(raw_text)
+
+
+def validate_anchor_text(raw_text: str, config: GenerationConfig) -> str:
+    return normalize_multiline_text(raw_text)
 
 
 def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
-    return normalize_text(raw_text)
-
-
-def validate_continuity_brief_text(raw_text: str, config: GenerationConfig) -> str:
     return normalize_text(raw_text)
 
 

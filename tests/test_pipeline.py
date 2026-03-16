@@ -7,23 +7,76 @@ from story_app.pipeline import KidStoryPipeline
 from story_app.schemas import ValidationError
 
 
-VALID_DESCRIPTION = (
-    "A small blue house with a red roof stands between two green trees beside a little blue car under a yellow sun."
+INITIAL_ANCHOR = (
+    "actor: curious little blue fish\n"
+    "actor_colors: blue and purple\n"
+    "actor_traits: bright eyes, long fins\n"
+    "scene: underwater garden\n"
+    "scene_colors: teal water, green sea plants\n"
+    "object_1: sea plants\n"
+    "object_1_colors: green\n"
+    "object_2: coral arch\n"
+    "object_2_colors: orange\n"
+    "object_3: none\n"
+    "object_3_colors: none\n"
+    "secondary_actor: none\n"
+    "secondary_actor_colors: none\n"
+    "page_event: calm exploration\n"
+    "mood: peaceful"
 )
-VALID_PART_1 = (
-    "The small blue house glowed softly under the yellow sun while the little blue car rested between the two green "
-    "trees. Everything felt quiet and warm, and the stillness held one tiny question about what gentle moment might "
-    "begin next."
+
+PART_2_ANCHOR = (
+    "actor: curious little blue fish\n"
+    "actor_colors: blue and purple\n"
+    "actor_traits: bright eyes, long fins\n"
+    "scene: underwater garden near the coral arch\n"
+    "scene_colors: teal water, green sea plants, orange coral\n"
+    "object_1: sea plants\n"
+    "object_1_colors: green\n"
+    "object_2: glowing creature\n"
+    "object_2_colors: pale gold\n"
+    "object_3: coral arch\n"
+    "object_3_colors: orange\n"
+    "secondary_actor: none\n"
+    "secondary_actor_colors: none\n"
+    "page_event: glowing creature appears\n"
+    "mood: curious"
 )
-VALID_PART_2 = (
-    "A light breeze stirred the two green trees, and the little blue car seemed to wait patiently beside the house. "
-    "The quiet scene felt full of promise, as if the warm sunlight were guiding the whole place toward a tender new "
-    "moment."
+
+PART_3_ANCHOR = (
+    "actor: curious little blue fish\n"
+    "actor_colors: blue and purple\n"
+    "actor_traits: bright eyes, long fins\n"
+    "scene: underwater garden\n"
+    "scene_colors: teal water, green sea plants\n"
+    "object_1: sea plants\n"
+    "object_1_colors: green\n"
+    "object_2: glowing creature\n"
+    "object_2_colors: pale gold\n"
+    "object_3: none\n"
+    "object_3_colors: none\n"
+    "secondary_actor: none\n"
+    "secondary_actor_colors: none\n"
+    "page_event: calm farewell\n"
+    "mood: peaceful and warm"
 )
-VALID_PART_3 = (
-    "By evening, the blue house, the two green trees, and the little blue car all rested beneath the fading yellow "
-    "sun. The gentle scene settled into peace, and the day ended with a calm feeling that made everything seem safe "
-    "and still."
+
+PART_1_TEXT = (
+    "A curious little blue fish with purple shimmer glided through the underwater garden beside the green sea "
+    "plants. The orange coral arch glowed softly nearby while the water stayed calm and bright. The little fish "
+    "slowed down as if it had just noticed something new ahead."
+)
+
+PART_2_TEXT = (
+    "The curious little blue fish with purple shimmer swam closer to a pale gold glowing creature near the orange "
+    "coral arch. The green sea plants bent gently as the water flickered around them. The little fish circled the "
+    "glow with wide bright eyes."
+)
+
+PART_3_TEXT = (
+    "The curious little blue fish with purple shimmer gave the pale gold glowing creature a calm final look. The "
+    "green sea plants swayed softly as the glow faded into the teal water. The little fish drifted home through the "
+    "underwater garden feeling safe and peaceful."
 )
 
 
@@ -32,56 +85,42 @@ class SharedFakeProvider:
 
     def __init__(self, config):
         self.config = config
-        self.description_calls = 0
+        self.initial_anchor_calls = 0
+        self.anchor_update_calls = 0
         self.story_calls = 0
         self.unload_calls = 0
         SharedFakeProvider.instances.append(self)
 
-    def describe(self, image_path, messages):
-        self.description_calls += 1
-        return VALID_DESCRIPTION
+    def extract_initial_anchor(self, image_path, messages):
+        self.initial_anchor_calls += 1
+        return INITIAL_ANCHOR
 
-    def generate_continuity_brief(self, messages):
-        return "The same blue house with a red roof, two green trees, and small blue car stay visually consistent when visible."
+    def generate_next_anchor(self, messages):
+        self.anchor_update_calls += 1
+        if self.anchor_update_calls == 1:
+            return PART_2_ANCHOR
+        return PART_3_ANCHOR
 
     def generate_part(self, image_path, messages):
         self.story_calls += 1
-        step_index = ((self.story_calls - 1) % 3) + 1
-        if step_index == 1:
-            return VALID_PART_1
-        if step_index == 2:
-            return VALID_PART_2
-        return VALID_PART_3
+        if self.story_calls == 1:
+            return PART_1_TEXT
+        if self.story_calls == 2:
+            return PART_2_TEXT
+        return PART_3_TEXT
 
     def unload(self, clear_cache=False):
         self.unload_calls += 1
         return None
 
 
-class PackageFakeProvider:
+class PackageFakeProvider(SharedFakeProvider):
     instances = []
 
     def __init__(self, config):
-        self.config = config
-        self.description_calls = 0
-        self.story_calls = 0
+        super().__init__(config)
         self.image_prompt_calls = []
-        type(self).instances.append(self)
-
-    def describe(self, image_path, messages):
-        self.description_calls += 1
-        return VALID_DESCRIPTION
-
-    def generate_continuity_brief(self, messages):
-        return "The same blue house with a red roof, two green trees, and small blue car stay visually consistent when visible."
-
-    def generate_part(self, image_path, messages):
-        self.story_calls += 1
-        if self.story_calls == 1:
-            return VALID_PART_1
-        if self.story_calls == 2:
-            return VALID_PART_2
-        return VALID_PART_3
+        PackageFakeProvider.instances.append(self)
 
     def generate_image_prompt(self, messages, max_new_tokens=None):
         call_index = len(self.image_prompt_calls) + 1
@@ -92,27 +131,24 @@ class PackageFakeProvider:
             }
         )
         if call_index == 1:
-            return "little blue car by the two green trees under the yellow sun"
+            return "curious little blue fish with purple shimmer among green sea plants in teal water"
         if call_index == 2:
-            return "little blue car notices a glowing lantern near the first tree"
-        return "little blue car rests by the blue house while the lantern glows softly"
-
-    def unload(self, clear_cache=False):
-        return None
+            return "curious little blue fish with purple shimmer faces a pale gold glowing creature by the orange coral arch"
+        return "curious little blue fish with purple shimmer drifts calmly through teal water as the pale gold glow fades"
 
 
-class NonEosDescriptionProvider:
+class NonEosInitialAnchorProvider:
     def __init__(self, config):
         self.config = config
 
-    def describe(self, image_path, messages):
-        raise ValidationError("Description generation did not finish naturally before the safety limit.")
+    def extract_initial_anchor(self, image_path, messages):
+        raise ValidationError("Initial anchor generation did not finish naturally before the safety limit.")
 
-    def generate_continuity_brief(self, messages):
-        return "The same blue house stays visually consistent when visible."
+    def generate_next_anchor(self, messages):
+        return PART_2_ANCHOR
 
     def generate_part(self, image_path, messages):
-        return VALID_PART_1
+        return PART_1_TEXT
 
     def unload(self, clear_cache=False):
         return None
@@ -126,34 +162,34 @@ class NonEosStoryProvider:
         self.story_calls = 0
         NonEosStoryProvider.instances.append(self)
 
-    def describe(self, image_path, messages):
-        return VALID_DESCRIPTION
+    def extract_initial_anchor(self, image_path, messages):
+        return INITIAL_ANCHOR
 
-    def generate_continuity_brief(self, messages):
-        return "The same blue house stays visually consistent when visible."
+    def generate_next_anchor(self, messages):
+        return PART_2_ANCHOR
 
     def generate_part(self, image_path, messages):
         self.story_calls += 1
         if self.story_calls == 1:
-            return VALID_PART_1
+            return PART_1_TEXT
         raise ValidationError("Story generation did not finish naturally before the safety limit.")
 
     def unload(self, clear_cache=False):
         return None
 
 
-class NonEosContinuityProvider:
+class NonEosAnchorUpdateProvider:
     def __init__(self, config):
         self.config = config
 
-    def describe(self, image_path, messages):
-        return VALID_DESCRIPTION
+    def extract_initial_anchor(self, image_path, messages):
+        return INITIAL_ANCHOR
 
-    def generate_continuity_brief(self, messages):
-        raise ValidationError("Continuity brief generation did not finish naturally before the safety limit.")
+    def generate_next_anchor(self, messages):
+        raise ValidationError("Next-page anchor generation did not finish naturally before the safety limit.")
 
     def generate_part(self, image_path, messages):
-        return VALID_PART_1
+        return PART_1_TEXT
 
     def unload(self, clear_cache=False):
         return None
@@ -266,18 +302,18 @@ class PipelineTests(unittest.TestCase):
         path.write_bytes(b"fake-image")
         return path
 
-    def test_pipeline_stops_when_description_does_not_finish_with_eos(self):
+    def test_pipeline_stops_when_initial_anchor_does_not_finish_with_eos(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=NonEosDescriptionProvider,
-                writer_factory=NonEosDescriptionProvider,
+                describer_factory=NonEosInitialAnchorProvider,
+                writer_factory=NonEosInitialAnchorProvider,
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
 
-    def test_pipeline_stops_before_part_3_when_part_2_does_not_finish_with_eos(self):
+    def test_pipeline_stops_when_part_2_does_not_finish_with_eos(self):
         NonEosStoryProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -290,18 +326,18 @@ class PipelineTests(unittest.TestCase):
                 pipeline.create_story_draft(self._create_input_file(root))
             self.assertEqual(NonEosStoryProvider.instances[-1].story_calls, 2)
 
-    def test_pipeline_stops_when_continuity_brief_does_not_finish_with_eos(self):
+    def test_pipeline_stops_when_next_anchor_does_not_finish_with_eos(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
                 config=GenerationConfig(outputs_root=root / "outputs"),
-                describer_factory=NonEosContinuityProvider,
-                writer_factory=NonEosContinuityProvider,
+                describer_factory=NonEosAnchorUpdateProvider,
+                writer_factory=NonEosAnchorUpdateProvider,
             )
             with self.assertRaises(ValidationError):
                 pipeline.create_story_draft(self._create_input_file(root))
 
-    def test_pipeline_smoke_path_saves_minimal_story_artifacts(self):
+    def test_pipeline_smoke_path_saves_story_and_anchor_artifacts(self):
         SharedFakeProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -312,31 +348,16 @@ class PipelineTests(unittest.TestCase):
             )
             result = pipeline.create_story_draft(self._create_input_file(root))
 
-            self.assertEqual(result.description.description_text, VALID_DESCRIPTION)
-            self.assertEqual(result.part_1_text, VALID_PART_1)
-            self.assertEqual(result.part_2_text, VALID_PART_2)
-            self.assertEqual(result.part_3_text, VALID_PART_3)
-            self.assertIn("SYSTEM:", result.full_conversation_text)
-            self.assertIn(VALID_DESCRIPTION, result.full_conversation_text)
-            self.assertIn(VALID_PART_1, result.full_conversation_text)
-            self.assertIn(VALID_PART_2, result.full_conversation_text)
-            self.assertIn(VALID_PART_3, result.full_conversation_text)
+            self.assertEqual(result.description.description_text, INITIAL_ANCHOR)
+            self.assertEqual(result.part_1_text, PART_1_TEXT)
+            self.assertEqual(result.part_2_text, PART_2_TEXT)
+            self.assertEqual(result.part_3_text, PART_3_TEXT)
+            self.assertTrue((result.run_dir / "story_part_1_anchor.txt").exists())
+            self.assertTrue((result.run_dir / "story_part_2_anchor.txt").exists())
+            self.assertTrue((result.run_dir / "story_part_3_anchor.txt").exists())
+            self.assertTrue((result.run_dir / "story_conversation.txt").exists())
 
-            input_images = list(result.run_dir.glob("input_image*"))
-            self.assertEqual(len(input_images), 1)
-
-            expected_files = [
-                "description_prompt.txt",
-                "description.txt",
-                "story_conversation.txt",
-                "story_part_1.txt",
-                "story_part_2.txt",
-                "story_part_3.txt",
-            ]
-            for filename in expected_files:
-                self.assertTrue((result.run_dir / filename).exists(), filename)
-
-    def test_pipeline_reuses_single_provider_instance_across_runs(self):
+    def test_pipeline_reuses_one_describer_and_one_writer_across_runs(self):
         SharedFakeProvider.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -349,12 +370,11 @@ class PipelineTests(unittest.TestCase):
             pipeline.create_story_draft(self._create_input_file(root))
 
             self.assertEqual(len(SharedFakeProvider.instances), 2)
-            self.assertEqual(SharedFakeProvider.instances[0].description_calls, 2)
+            self.assertEqual(SharedFakeProvider.instances[0].initial_anchor_calls, 2)
             self.assertEqual(SharedFakeProvider.instances[0].story_calls, 0)
-            self.assertEqual(SharedFakeProvider.instances[1].description_calls, 0)
+            self.assertEqual(SharedFakeProvider.instances[1].initial_anchor_calls, 0)
+            self.assertEqual(SharedFakeProvider.instances[1].anchor_update_calls, 4)
             self.assertEqual(SharedFakeProvider.instances[1].story_calls, 6)
-            self.assertEqual(SharedFakeProvider.instances[0].unload_calls, 0)
-            self.assertEqual(SharedFakeProvider.instances[1].unload_calls, 0)
 
     def test_pipeline_can_clear_loaded_models(self):
         SharedFakeProvider.instances = []
@@ -371,7 +391,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(SharedFakeProvider.instances[0].unload_calls, 1)
             self.assertEqual(SharedFakeProvider.instances[1].unload_calls, 1)
 
-    def test_story_package_uses_image_token_budget_and_previous_page_prompt(self):
+    def test_story_package_uses_page_anchors_for_image_prompts(self):
         PackageFakeProvider.instances = []
         BudgetAwareFakeImageGenerator.instances = []
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -392,31 +412,13 @@ class PipelineTests(unittest.TestCase):
 
             writer = PackageFakeProvider.instances[-1]
             image_generator = BudgetAwareFakeImageGenerator.instances[0]
-            self.assertEqual(
-                [call["max_new_tokens"] for call in writer.image_prompt_calls],
-                [41, 41, 41],
-            )
-            self.assertEqual(writer.story_calls, 3)
-            self.assertIn(
-                "Continuity brief:",
-                writer.image_prompt_calls[0]["messages"][1]["content"],
-            )
-            self.assertIn(
-                "same blue house with a red roof",
-                writer.image_prompt_calls[0]["messages"][1]["content"],
-            )
+            self.assertEqual([call["max_new_tokens"] for call in writer.image_prompt_calls], [41, 41, 41])
+            self.assertIn("Current page anchor:", writer.image_prompt_calls[0]["messages"][1]["content"])
+            self.assertIn("Use only the current page anchor, not any previous story text", writer.image_prompt_calls[1]["messages"][1]["content"])
+            self.assertNotIn("Story moment:", writer.image_prompt_calls[0]["messages"][1]["content"])
             self.assertEqual(image_generator.prompt_token_limit_calls, [1])
             self.assertEqual(len(image_generator.validated_prompts), 3)
             self.assertTrue(all(call["strict"] for call in image_generator.validated_prompts))
-            self.assertIn("Previous page final image prompt:", writer.image_prompt_calls[1]["messages"][1]["content"])
-            self.assertIn(
-                "little blue car by the two green trees under the yellow sun, children's picture-book illustration",
-                writer.image_prompt_calls[1]["messages"][1]["content"],
-            )
-            self.assertIn(
-                "little blue car notices a glowing lantern near the first tree, children's picture-book illustration",
-                writer.image_prompt_calls[2]["messages"][1]["content"],
-            )
             self.assertTrue(Path(result.final_story_video_path).exists())
 
     def test_story_package_stops_when_image_prompt_summary_does_not_finish_with_eos(self):

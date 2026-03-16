@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-story-canon-repeat-v29-20260316"
+APP_BUILD = "phase2-anchor-snapshots-v30-20260316"
 
 
 @dataclass(frozen=True)
@@ -20,20 +20,32 @@ class ModelIds:
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     description_prompt_prefix: str = (
-        "Describe the depicted scene in one grounded prose paragraph of about 5 short sentences. First establish the "
-        "setting. Then identify one notable central actor or character if one is clearly present. If no notable "
-        "character is clearly present, invent one fitting scene-related actor using a descriptive role instead of a "
-        "proper name, and make that actor feel natural in the scene. One sentence must explicitly say who the "
-        "central actor is. Describe the actor clearly enough for story and image continuity, including defining "
-        "visual traits, where they are, and what they are doing or noticing. Keep all other details faithful to "
-        "visible scene facts. Treat the depicted content as a real scene, not as a drawing or uploaded image. Keep "
-        "the prose concise. Never mention the image, picture, drawing, illustration, sketch, painting, child art, "
-        "paper, style, artist, or composition. Reply only with the "
-        "description text."
+        "Observe the uploaded scene and fill one compact anchor sheet for page 1 of a children's story. Treat the "
+        "depicted content as a real scene, never as a drawing, picture, sketch, illustration, painting, or child "
+        "art. Identify one central actor. If no clear actor exists, create one fitting general actor for the scene, "
+        "such as a child, bunny, fish, duckling, fox, or similar simple character. Include explicit colors for the "
+        "actor, the scene, and each important object whenever visible. Output exactly these lines in this exact "
+        "order, using `none` when needed:\n"
+        "actor:\n"
+        "actor_colors:\n"
+        "actor_traits:\n"
+        "scene:\n"
+        "scene_colors:\n"
+        "object_1:\n"
+        "object_1_colors:\n"
+        "object_2:\n"
+        "object_2_colors:\n"
+        "object_3:\n"
+        "object_3_colors:\n"
+        "secondary_actor:\n"
+        "secondary_actor_colors:\n"
+        "page_event:\n"
+        "mood:\n"
+        "Reply only with the anchor sheet text."
     )
-    description_max_tokens: int = 448
+    initial_anchor_max_tokens: int = 224
+    anchor_update_max_tokens: int = 224
     story_part_max_tokens: int = 384
-    continuity_brief_max_tokens: int = 96
     image_width: int = 1024
     image_height: int = 1024
     image_num_inference_steps: int = 20

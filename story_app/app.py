@@ -84,7 +84,7 @@ APP_CSS = """
 INTRO_HTML = f"""
 <div class="hero-card">
   <h1>Resident Storyboard Workbench</h1>
-  <p class="debug-copy">This build turns one uploaded drawing into one grounded description, one three-part story, three separate text-to-image storyboard illustrations, three narration tracks, and one final highlighted story video.</p>
+  <p class="debug-copy">This build turns one uploaded scene into one page-1 anchor sheet, two updated page anchor sheets, one three-part story, three separate text-to-image storyboard illustrations, three narration tracks, and one final highlighted story video.</p>
   <p class="debug-copy"><strong>Build:</strong> {APP_BUILD}</p>
   <p class="debug-copy"><strong>Description model:</strong> {DEFAULT_CONFIG.models.image_describer}</p>
   <p class="debug-copy"><strong>Story model:</strong> {DEFAULT_CONFIG.models.story_writer}</p>
@@ -119,7 +119,7 @@ def _read_text_for_ui(text_path: str | None) -> str:
 
 def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(track_tqdm=False)):
     if not image_path:
-        raise gr.Error("Upload a drawing before starting.")
+        raise gr.Error("Upload an image before starting.")
 
     try:
         result = _PIPELINE.create_story_package(
@@ -174,7 +174,7 @@ def build_demo() -> gr.Blocks:
             with gr.Row():
                 with gr.Column(scale=4, min_width=320):
                     input_image = gr.Image(
-                        label="Upload or capture a drawing",
+                        label="Upload or capture an image",
                         type="filepath",
                         image_mode="RGB",
                         sources=["upload", "webcam"],
@@ -188,7 +188,7 @@ def build_demo() -> gr.Blocks:
             with gr.Column(elem_classes=["surface-card"]):
                 preview_image = gr.Image(label="Uploaded image", interactive=False)
                 description_output = gr.Textbox(
-                    label="Generated description",
+                    label="Page 1 anchors",
                     lines=8,
                     interactive=False,
                 )

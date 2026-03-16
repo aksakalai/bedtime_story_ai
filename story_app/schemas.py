@@ -31,6 +31,9 @@ class RunPaths:
     input_image_path: Path
     description_prompt_path: Path
     description_path: Path
+    story_part_1_anchor_path: Path
+    story_part_2_anchor_path: Path
+    story_part_3_anchor_path: Path
     story_conversation_path: Path
     story_part_1_path: Path
     story_part_2_path: Path
@@ -65,6 +68,9 @@ class PipelineResult:
     part_1_text: str
     part_2_text: str
     part_3_text: str
+    story_part_1_anchor_path: str | None = None
+    story_part_2_anchor_path: str | None = None
+    story_part_3_anchor_path: str | None = None
     image_prompt_part_1_path: str | None = None
     image_prompt_part_2_path: str | None = None
     image_prompt_part_3_path: str | None = None
@@ -88,9 +94,11 @@ class PipelineResult:
 class StoryboardManifestPart:
     index: int
     text: str
+    anchor_text: str
     image_prompt: str
     seed: int
     image_path: str
+    anchor_path: str | None = None
     audio_path: str | None = None
     audio_duration_seconds: float | None = None
     subtitle_path: str | None = None
@@ -115,9 +123,11 @@ class StoryboardManifest:
                 {
                     "index": part.index,
                     "text": part.text,
+                    "anchor_text": part.anchor_text,
                     "image_prompt": part.image_prompt,
                     "seed": part.seed,
                     "image_path": part.image_path,
+                    "anchor_path": part.anchor_path,
                     "audio_path": part.audio_path,
                     "audio_duration_seconds": part.audio_duration_seconds,
                     "subtitle_path": part.subtitle_path,
