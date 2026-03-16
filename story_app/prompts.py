@@ -14,21 +14,32 @@ DESCRIPTION_SYSTEM_PROMPT = (
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
 
 STORY_SYSTEM_PROMPT = (
-    "You write gentle bedtime-story prose. Stay faithful to the provided scene description and the earlier story "
-    "parts. Reply only with the requested story text. Do not add labels or meta commentary."
+    "You write gentle bedtime-story prose that works like three consecutive children's picture-book pages. Stay "
+    "faithful to the provided scene description and the earlier story parts. Make each part visually distinct and "
+    "easy to illustrate. Reply only with the requested story text. Do not add labels or meta commentary."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
     "You turn one bedtime-story moment into one short image prompt sentence for a CLIP-limited image model. "
-    "Reply with exactly one sentence describing only the unique visible details of the scene. Keep the sentence "
-    "concrete and visual. Prioritize the main subject, distinctive objects, setting, time of day, and one visible "
-    "action. Do not repeat the whole story. Do not add camera terms, artist names, text, captions, logos, "
-    "watermarks, borders, frames, panels, or extra unrelated details."
+    "The image should feel like a children's picture-book illustration. Reply with exactly one sentence describing "
+    "only the unique visible details of this moment. Keep the sentence concrete and visual. Prioritize the main "
+    "subject, distinctive objects, setting, time of day, and the one visible event or change that makes this "
+    "moment different. Keep only a few grounding scene details and make the new change or ending state prominent. "
+    "Do not repeat the whole story. Do not add camera terms, artist names, text, captions, logos, watermarks, "
+    "borders, frames, panels, or extra unrelated details."
 )
 
-PART_2_USER_PROMPT = "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, keep it gentle, and write about 50 words. Reply only with the story text."
+PART_2_USER_PROMPT = (
+    "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, "
+    "and introduce one noticeable event or visible change that would make the illustration clearly different from "
+    "part 1. Keep it gentle and write about 50 words. Reply only with the story text."
+)
 
-PART_3_USER_PROMPT = "Write only part 3 of the same bedtime story. Continue directly, stay grounded in the same scene description, end with a calm hopeful feeling, and write about 50 words. Reply only with the story text."
+PART_3_USER_PROMPT = (
+    "Write only part 3 of the same bedtime story. Continue directly, stay grounded in the same scene description, "
+    "and conclude with a calm hopeful ending that includes another noticeable visible change showing the settled "
+    "final state. Write about 50 words. Reply only with the story text."
+)
 
 
 def normalize_text(raw_text: str) -> str:
@@ -60,8 +71,9 @@ def build_story_part_1_prompt(description_text: str) -> str:
     return (
         "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
         f"Scene description:\n{description_text}\n\n"
-        "Keep the story grounded in those visible details, begin in that scene, stay warm and clean, and write about "
-        "50 words. Reply only with the story text."
+        "Keep the story grounded in those visible details, begin with a clear opening picture-book scene, establish "
+        "the setting and main subjects, avoid the main event for now, stay warm and clean, and write about 50 words. "
+        "Reply only with the story text."
     )
 
 
@@ -111,12 +123,27 @@ def build_story_part_image_summary_messages(
     *,
     description_text: str,
     part_text: str,
+    part_index: int,
     max_image_prompt_tokens: int,
 ) -> list[dict[str, Any]]:
+    if part_index == 1:
+        part_role = (
+            "This is part 1, so emphasize the opening scene and the main subjects clearly."
+        )
+    elif part_index == 2:
+        part_role = (
+            "This is part 2, so make the new event or visible change the main focus."
+        )
+    else:
+        part_role = (
+            "This is part 3, so make the calm concluding change or ending state the main focus."
+        )
+
     prompt_text = (
-        "Write one short sentence prompt for a single illustration of this story moment.\n\n"
+        "Write one short sentence prompt for a single children's picture-book illustration of this story moment.\n\n"
         f"Scene description:\n{description_text}\n\n"
         f"Story moment:\n{part_text}\n\n"
+        f"{part_role}\n\n"
         f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Focus only on the unique "
         "visible details from this one moment. Reply only with the final sentence."
     )

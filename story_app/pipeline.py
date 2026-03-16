@@ -173,6 +173,7 @@ class KidStoryPipeline:
                 self.config,
                 description_text=warm_description,
                 part_text=warm_story_text,
+                part_index=1,
                 max_image_prompt_tokens=image_prompt_token_limit,
             )
             scene_prompt_text = writer.generate_image_prompt(
@@ -429,6 +430,7 @@ class KidStoryPipeline:
                 self.config,
                 description_text=draft_result.description.description_text,
                 part_text=part_text,
+                part_index=index,
                 max_image_prompt_tokens=image_prompt_token_limit,
             )
             scene_prompt_text = writer.generate_image_prompt(

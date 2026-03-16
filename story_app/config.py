@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-image-prompt-hard-budget-v22-20260316"
+APP_BUILD = "phase2-prompt-tuning-v23-20260316"
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class GenerationConfig:
     image_height: int = 1024
     image_num_inference_steps: int = 20
     image_guidance_scale: float = 9.0
-    image_prompt_style_suffix: str = ""
+    image_prompt_style_suffix: str = "children's picture-book illustration"
     image_negative_prompt: str = (
         "low quality, blurry, muddy colors, flat lighting, deformed anatomy, extra limbs, duplicate characters, "
         "cropped face, text, letters, watermark, logo, signature, frame, border, collage, split panel"
