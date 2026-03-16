@@ -12,6 +12,7 @@ class ProviderHelperTests(unittest.TestCase):
     def test_count_image_placeholders_matches_text_only_story_turn_history(self):
         messages = build_story_messages(
             description_text="A blue house stands beside two green trees and a blue car.",
+            continuity_brief="actor: cheerful yard child in a red coat; anchors: blue house with red roof, small blue car, two green trees",
             previous_parts=[
                 "Part 1 text.",
                 "Part 2 text.",

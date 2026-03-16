@@ -10,54 +10,59 @@ DESCRIPTION_SYSTEM_PROMPT = (
     "You carefully observe the image and follow the current request. Write only one grounded prose paragraph that "
     "defines the scene and one central actor for a children's story. If a notable character is clearly present, use "
     "that character as the actor. If no notable character is clearly present, invent one fitting scene-related actor "
-    "using a descriptive role instead of a proper name. The paragraph must explicitly state who that actor is. Do "
-    "not add labels or meta commentary."
+    "using a descriptive role instead of a proper name. The paragraph must explicitly state who that actor is and "
+    "what defining visual traits make that actor recognizable. Do not add labels or meta commentary."
 )
 
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
 
 CONTINUITY_BRIEF_SYSTEM_PROMPT = (
     "You turn a scene-and-actor description into one tiny continuity brief for recurring visual consistency across "
-    "three children's picture-book pages. Reply with one compact line only, not a paragraph. Name the actor first, "
-    "then list only the few recurring anchors that should stay visually the same when visible. Use concrete colors "
-    "and identities only when the description already gives them. Do not rewrite the full scene description. Reply "
-    "only with the continuity brief text."
+    "three children's picture-book pages. Reply with one compact line only, not a paragraph. Name the actor first "
+    "as one full descriptive phrase, then list only the few recurring anchors that should stay visually the same "
+    "when visible. Use concrete colors and identities only when the description already gives them. Never reduce "
+    "specific details to bare nouns if the description gives stronger visual attributes. Do not rewrite the full "
+    "scene description. Reply only with the continuity brief text."
 )
 
 STORY_SYSTEM_PROMPT = (
     "You write gentle bedtime-story prose for three consecutive children's picture-book pages that follow the same "
-    "central actor across one simple story arc. Stay faithful to the scene-and-actor description and to earlier "
-    "parts. Part 1 introduces the scene and actor. Part 2 introduces one visible event, mystery, or noticeable "
-    "change affecting that actor. Part 3 resolves that same event with a calm hopeful ending. If the setting "
-    "shifts, move only to a directly related nearby place from the previous page. Keep the actor consistent, keep "
-    "the prose concise, and do not introduce proper names unless the description already uses one. Reply only with "
-    "the requested story text."
+    "central actor across one simple story arc. Stay faithful to the scene-and-actor description, to the continuity "
+    "brief if one is provided, and to earlier parts. Treat the continuity brief as required visual canon. In every "
+    "part, naturally repeat the actor's defining appearance and any visible canon anchors so the illustrations can "
+    "stay consistent. Part 1 introduces the scene and actor. Part 2 introduces one visible event, mystery, or "
+    "noticeable change affecting that actor. Part 3 resolves that same event with a calm hopeful ending. If the "
+    "setting shifts, move only to a directly related nearby place from the previous page. Keep the actor consistent, "
+    "keep the prose concise, do not rename the actor, and do not introduce proper names unless the description "
+    "already uses one. Reply only with the requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
     "You turn one bedtime-story moment into one very short image prompt sentence for a CLIP-limited image model. "
     "The image should feel like a children's picture-book illustration. Reply with one short sentence only. Keep "
     "the same central actor and story continuity, but describe only what must be visible on this page. You may also "
-    "receive a continuity brief that locks recurring anchors. If one of those anchors is visible here, preserve its "
-    "same described color and identity instead of redesigning it. Mention the actor first or early, keep recurring "
-    "anchors to a bare minimum, and highlight the one visible event, mystery, or resolved state that makes this page "
-    "different. Do not restage the previous page, restate the whole scene description, or list every object. Do not "
-    "add camera terms, artist names, text, captions, logos, watermarks, borders, frames, panels, or extra unrelated "
-    "details."
+    "receive a continuity brief that locks the actor phrase and recurring anchors. If the actor is visible here, "
+    "reuse that actor phrase nearly verbatim. If one of those anchors is visible here, preserve its same described "
+    "color and identity instead of redesigning it. Mention the actor first or early, keep recurring anchors to a "
+    "bare minimum, and highlight the one visible event, mystery, or resolved state that makes this page different. "
+    "Do not restage the previous page, restate the whole scene description, or list every object. Do not add camera "
+    "terms, artist names, text, captions, logos, watermarks, borders, frames, panels, or extra unrelated details."
 )
 
 PART_2_USER_PROMPT = (
     "Write only part 2 of the same bedtime story. Continue directly from part 1. Keep following the same central "
     "actor, and introduce one visible event, mystery, or noticeable change that affects that actor and makes this "
     "page look clearly different from part 1. If the setting shifts, move only to a directly related nearby place "
-    "from part 1. Do not resolve the event yet. Use exactly 3 sentences. Reply only with the story text."
+    "from part 1. Naturally repeat the actor's defining appearance and any visible canon anchors again. Do not "
+    "resolve the event yet. Use exactly 3 short sentences. Reply only with the story text."
 )
 
 PART_3_USER_PROMPT = (
     "Write only part 3 of the same bedtime story. Continue directly from part 2. Keep following the same central "
     "actor, resolve the same event or change from part 2, and show the calm final state that makes this page look "
     "clearly different from part 2. If the setting shifts, move only to a directly related nearby place from part "
-    "2. Use exactly 3 sentences. Reply only with the story text."
+    "2. Naturally repeat the actor's defining appearance and any visible canon anchors again. Use exactly 3 short "
+    "sentences. Reply only with the story text."
 )
 
 
@@ -87,35 +92,16 @@ def build_description_messages(prompt_text: str) -> list[dict[str, Any]]:
 
 
 def build_continuity_brief_messages(description_text: str) -> list[dict[str, Any]]:
-    return build_continuity_brief_messages_from_story(
-        description_text=description_text,
-        story_parts=[],
-    )
-
-
-def build_continuity_brief_messages_from_story(
-    *,
-    description_text: str,
-    story_parts: list[str],
-) -> list[dict[str, Any]]:
-    story_section = ""
-    if story_parts:
-        story_lines = [
-            f"Part {index}: {part_text}"
-            for index, part_text in enumerate(story_parts, start=1)
-        ]
-        story_section = "Story parts:\n" + "\n".join(story_lines) + "\n\n"
-
     prompt_text = (
-        "Write one tiny continuity brief based on the scene-and-actor description and story text below.\n\n"
+        "Write one tiny continuity brief based on the scene-and-actor description below.\n\n"
         f"Scene and actor description:\n{description_text}\n\n"
-        f"{story_section}"
         "Reply in exactly this compact format:\n"
-        "actor: <actor>; anchors: <anchor 1>, <anchor 2>, <anchor 3>\n\n"
-        "Choose the actor the story actually follows. If the story does not clearly follow a character, choose a "
-        "fitting descriptive-role actor from the scene description. Mention at most 3 recurring anchors that should "
-        "stay visually the same when visible. Keep it extremely concise and do not rewrite the whole scene or story. "
-        "Reply only with the continuity brief text."
+        "actor: <full actor phrase>; anchors: <anchor phrase 1>, <anchor phrase 2>, <anchor phrase 3>\n\n"
+        "The actor phrase must include the actor's defining visual traits if the description gives them, such as "
+        "color, species, clothing, size, or other distinctive appearance details. Each anchor must be a short noun "
+        "phrase with its defining color or identity if the description gives one. Avoid vague anchors like fish, "
+        "house, scales, plants, sky, sun, or current on their own when stronger phrases are available. Keep it very "
+        "concise and do not rewrite the whole scene. Reply only with the continuity brief text."
     )
     return [
         {"role": "system", "content": CONTINUITY_BRIEF_SYSTEM_PROMPT},
@@ -123,25 +109,28 @@ def build_continuity_brief_messages_from_story(
     ]
 
 
-def build_story_part_1_prompt(description_text: str) -> str:
+def build_story_part_1_prompt(description_text: str, continuity_brief: str) -> str:
     return (
         "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
         f"Scene and actor description:\n{description_text}\n\n"
+        f"Continuity brief:\n{continuity_brief}\n\n"
         "Open with the same central actor in the described setting. Establish who the actor is, where they are, and "
-        "the calm mood of the page. Let the actor notice or approach something gentle, but do not start the main "
-        "event yet. Keep it warm, concrete, easy to illustrate, concise, and make each sentence short. Use exactly "
-        "3 sentences. Reply only with the story text."
+        "the calm mood of the page. Naturally repeat the actor phrase and any visible canon anchors. Let the actor "
+        "notice or approach something gentle, but do not start the main event yet. Keep it warm, concrete, easy to "
+        "illustrate, concise, and make each sentence short. Use exactly 3 short sentences. Reply only with the "
+        "story text."
     )
 
 
 def build_story_messages(
     *,
     description_text: str,
+    continuity_brief: str,
     previous_parts: list[str],
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": STORY_SYSTEM_PROMPT},
-        {"role": "user", "content": build_story_part_1_prompt(description_text)},
+        {"role": "user", "content": build_story_part_1_prompt(description_text, continuity_brief)},
     ]
 
     if not previous_parts:
@@ -150,13 +139,17 @@ def build_story_messages(
     messages.append({"role": "assistant", "content": previous_parts[0]})
 
     if len(previous_parts) == 1:
-        messages.append({"role": "user", "content": PART_2_USER_PROMPT})
+        messages.append({"role": "user", "content": _build_story_followup_prompt(PART_2_USER_PROMPT, continuity_brief)})
         return messages
 
-    messages.append({"role": "user", "content": PART_2_USER_PROMPT})
+    messages.append({"role": "user", "content": _build_story_followup_prompt(PART_2_USER_PROMPT, continuity_brief)})
     messages.append({"role": "assistant", "content": previous_parts[1]})
-    messages.append({"role": "user", "content": PART_3_USER_PROMPT})
+    messages.append({"role": "user", "content": _build_story_followup_prompt(PART_3_USER_PROMPT, continuity_brief)})
     return messages
+
+
+def _build_story_followup_prompt(base_prompt: str, continuity_brief: str) -> str:
+    return f"Continuity brief:\n{continuity_brief}\n\n{base_prompt}"
 
 
 def build_story_part_image_prompt(
@@ -218,10 +211,11 @@ def build_story_part_image_summary_messages(
         f"{previous_page_section}"
         f"{part_role}\n\n"
         f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Mention the same actor first "
-        "or early, use at most two recurring anchor details only if they help continuity, and if a recurring anchor "
-        "from the continuity brief is visible on this page, keep its same described color and identity. Keep the "
-        "sentence extremely concise, do not echo the full scene description, and focus on the single page-defining "
-        "visible change or settled ending state. Reply only with the final sentence."
+        "or early, and if the actor is visible, reuse the actor phrase from the continuity brief instead of a looser "
+        "substitute. Use at most two recurring anchor details only if they help continuity, and if a recurring "
+        "anchor from the continuity brief is visible on this page, keep its same described color and identity. Keep "
+        "the sentence extremely concise, do not echo the full scene description, and focus on the single page-"
+        "defining visible change or settled ending state. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
@@ -272,11 +266,7 @@ def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
 
 
 def validate_continuity_brief_text(raw_text: str, config: GenerationConfig) -> str:
-    text = normalize_text(raw_text)
-    words = text.split()
-    if len(words) > 24:
-        text = " ".join(words[:24]).rstrip(",;:")
-    return text
+    return normalize_text(raw_text)
 
 
 def validate_image_prompt_text(raw_text: str, config: GenerationConfig) -> str:

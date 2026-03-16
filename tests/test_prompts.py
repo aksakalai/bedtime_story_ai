@@ -10,7 +10,6 @@ from story_app.prompts import (
     PART_3_USER_PROMPT,
     STORY_SYSTEM_PROMPT,
     build_continuity_brief_messages,
-    build_continuity_brief_messages_from_story,
     build_description_messages,
     build_description_prompt,
     build_story_messages,
@@ -30,6 +29,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("one notable central actor or character", prompt)
         self.assertIn("If no notable character is clearly present, invent one fitting scene-related actor", prompt)
         self.assertIn("descriptive role instead of a proper name", prompt)
+        self.assertIn("One sentence must explicitly say who the central actor is", prompt)
         self.assertIn("Keep all other details faithful to visible scene facts", prompt)
         self.assertIn("Keep the prose concise", prompt)
         self.assertIn("Reply only with the description text", prompt)
@@ -48,6 +48,9 @@ class PromptTests(unittest.TestCase):
 
     def test_story_system_prompt_requires_same_actor_and_arc(self):
         self.assertIn("same central actor", STORY_SYSTEM_PROMPT)
+        self.assertIn("continuity brief", STORY_SYSTEM_PROMPT)
+        self.assertIn("required visual canon", STORY_SYSTEM_PROMPT)
+        self.assertIn("naturally repeat the actor's defining appearance", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 2 introduces one visible event, mystery, or noticeable change", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 3 resolves that same event", STORY_SYSTEM_PROMPT)
         self.assertIn("directly related nearby place", STORY_SYSTEM_PROMPT)
@@ -59,51 +62,44 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[0]["content"], CONTINUITY_BRIEF_SYSTEM_PROMPT)
         self.assertIn("Scene and actor description:", messages[1]["content"])
         self.assertIn("Reply in exactly this compact format", messages[1]["content"])
-        self.assertIn("actor: <actor>; anchors: <anchor 1>, <anchor 2>, <anchor 3>", messages[1]["content"])
+        self.assertIn("actor: <full actor phrase>; anchors: <anchor phrase 1>, <anchor phrase 2>, <anchor phrase 3>", messages[1]["content"])
+        self.assertIn("The actor phrase must include the actor's defining visual traits", messages[1]["content"])
+        self.assertIn("Avoid vague anchors like fish, house, scales, plants", messages[1]["content"])
         self.assertIn("Reply only with the continuity brief text", messages[1]["content"])
-
-    def test_build_continuity_brief_messages_from_story_uses_story_actor_context(self):
-        messages = build_continuity_brief_messages_from_story(
-            description_text="A blue house with a red roof stands in a sunny yard.",
-            story_parts=[
-                "A curious yard child stands by the blue house and listens to the breeze.",
-                "The yard child hears a rustle by the green tree and steps closer.",
-                "The yard child finds a white rabbit and smiles beside the blue house.",
-            ],
-        )
-
-        self.assertEqual(messages[0]["content"], CONTINUITY_BRIEF_SYSTEM_PROMPT)
-        self.assertIn("Story parts:", messages[1]["content"])
-        self.assertIn("Part 1:", messages[1]["content"])
-        self.assertIn("Choose the actor the story actually follows", messages[1]["content"])
 
     def test_build_story_part_1_prompt_injects_scene_and_actor_description(self):
         prompt = build_story_part_1_prompt(
             "A blue house stands beside two green trees and a blue car.",
+            "actor: cheerful yard child in a red coat; anchors: blue house with red roof, small blue car, two green trees",
         )
         self.assertIn("part 1 of a gentle three-part bedtime story", prompt)
         self.assertIn("Scene and actor description:", prompt)
+        self.assertIn("Continuity brief:", prompt)
         self.assertIn("A blue house stands beside two green trees and a blue car.", prompt)
         self.assertIn("Open with the same central actor", prompt)
+        self.assertIn("Naturally repeat the actor phrase and any visible canon anchors", prompt)
         self.assertIn("do not start the main event yet", prompt)
         self.assertIn("make each sentence short", prompt)
-        self.assertIn("Use exactly 3 sentences", prompt)
+        self.assertIn("Use exactly 3 short sentences", prompt)
 
     def test_part_2_prompt_targets_actor_affecting_event(self):
         self.assertIn("same central actor", PART_2_USER_PROMPT)
         self.assertIn("visible event, mystery, or noticeable change", PART_2_USER_PROMPT)
+        self.assertIn("Naturally repeat the actor's defining appearance", PART_2_USER_PROMPT)
         self.assertIn("Do not resolve the event yet", PART_2_USER_PROMPT)
-        self.assertIn("Use exactly 3 sentences", PART_2_USER_PROMPT)
+        self.assertIn("Use exactly 3 short sentences", PART_2_USER_PROMPT)
 
     def test_part_3_prompt_targets_resolution(self):
         self.assertIn("same central actor", PART_3_USER_PROMPT)
         self.assertIn("resolve the same event or change from part 2", PART_3_USER_PROMPT)
         self.assertIn("calm final state", PART_3_USER_PROMPT)
-        self.assertIn("Use exactly 3 sentences", PART_3_USER_PROMPT)
+        self.assertIn("Naturally repeat the actor's defining appearance", PART_3_USER_PROMPT)
+        self.assertIn("Use exactly 3 short sentences", PART_3_USER_PROMPT)
 
     def test_build_story_messages_for_part_1_starts_new_text_only_conversation(self):
         messages = build_story_messages(
             description_text="A blue house stands beside two green trees and a blue car.",
+            continuity_brief="actor: cheerful yard child in a red coat; anchors: blue house with red roof, small blue car, two green trees",
             previous_parts=[],
         )
 
@@ -111,22 +107,26 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[1]["role"], "user")
         self.assertIsInstance(messages[1]["content"], str)
         self.assertIn("Scene and actor description:", messages[1]["content"])
+        self.assertIn("Continuity brief:", messages[1]["content"])
         self.assertIn("blue house stands beside two green trees", messages[1]["content"])
 
     def test_build_story_messages_for_part_2_keeps_text_history_only(self):
         messages = build_story_messages(
             description_text="A rabbit stands beside a pond.",
+            continuity_brief="actor: small gray rabbit with a lantern; anchors: still pond, glowing lantern",
             previous_parts=["The rabbit watched the still pond shine softly."],
         )
 
         self.assertEqual(messages[2]["role"], "assistant")
         self.assertEqual(messages[2]["content"], "The rabbit watched the still pond shine softly.")
         self.assertEqual(messages[3]["role"], "user")
-        self.assertEqual(messages[3]["content"], PART_2_USER_PROMPT)
+        self.assertIn("Continuity brief:", messages[3]["content"])
+        self.assertIn(PART_2_USER_PROMPT, messages[3]["content"])
 
     def test_build_story_messages_for_part_3_keeps_full_text_history(self):
         messages = build_story_messages(
             description_text="A rabbit stands beside a pond.",
+            continuity_brief="actor: small gray rabbit with a lantern; anchors: still pond, glowing lantern",
             previous_parts=[
                 "The rabbit watched the still pond shine softly.",
                 "A small ripple widened once and then grew still again.",
@@ -136,7 +136,8 @@ class PromptTests(unittest.TestCase):
         self.assertEqual(messages[4]["role"], "assistant")
         self.assertEqual(messages[4]["content"], "A small ripple widened once and then grew still again.")
         self.assertEqual(messages[5]["role"], "user")
-        self.assertEqual(messages[5]["content"], PART_3_USER_PROMPT)
+        self.assertIn("Continuity brief:", messages[5]["content"])
+        self.assertIn(PART_3_USER_PROMPT, messages[5]["content"])
 
     def test_build_story_part_image_summary_messages_mentions_previous_page(self):
         messages = build_story_part_image_summary_messages(
@@ -160,6 +161,7 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Preserve continuity with that page", messages[1]["content"])
         self.assertIn("within 74 image-model tokens", messages[1]["content"])
         self.assertIn("Mention the same actor first or early", messages[1]["content"])
+        self.assertIn("reuse the actor phrase from the continuity brief", messages[1]["content"])
         self.assertIn("at most two recurring anchor details", messages[1]["content"])
         self.assertIn("keep its same described color and identity", messages[1]["content"])
 
@@ -171,6 +173,7 @@ class PromptTests(unittest.TestCase):
                     "role": "user",
                     "content": build_story_part_1_prompt(
                         "A calm blue house beside two trees.",
+                        "actor: calm blue house; anchors: two green trees, bright moon",
                     ),
                 },
                 {"role": "assistant", "content": "A calm story part."},
