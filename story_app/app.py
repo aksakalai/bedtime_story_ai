@@ -111,6 +111,12 @@ def _load_image_for_ui(image_path: str | None):
         return image.convert("RGB").copy()
 
 
+def _read_text_for_ui(text_path: str | None) -> str:
+    if not text_path:
+        return ""
+    return Path(text_path).read_text(encoding="utf-8")
+
+
 def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(track_tqdm=False)):
     if not image_path:
         raise gr.Error("Upload a drawing before starting.")
@@ -133,12 +139,15 @@ def generate_story(image_path: str | None, progress: gr.Progress = gr.Progress(t
         result.description.description_text,
         result.full_conversation_text,
         result.part_1_text,
+        _read_text_for_ui(result.image_prompt_part_1_path),
         _load_image_for_ui(result.story_part_1_image_path),
         result.story_part_1_audio_path,
         result.part_2_text,
+        _read_text_for_ui(result.image_prompt_part_2_path),
         _load_image_for_ui(result.story_part_2_image_path),
         result.story_part_2_audio_path,
         result.part_3_text,
+        _read_text_for_ui(result.image_prompt_part_3_path),
         _load_image_for_ui(result.story_part_3_image_path),
         result.story_part_3_audio_path,
         result.final_story_video_path,
@@ -193,6 +202,11 @@ def build_demo() -> gr.Blocks:
                 with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 1", elem_classes=["debug-title"])
                     part_1_output = gr.Textbox(lines=7, interactive=False)
+                    part_1_prompt_output = gr.Textbox(
+                        label="Image prompt used",
+                        lines=3,
+                        interactive=False,
+                    )
                     part_1_image_output = gr.Image(
                         label="Part 1 image",
                         interactive=False,
@@ -206,6 +220,11 @@ def build_demo() -> gr.Blocks:
                 with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 2", elem_classes=["debug-title"])
                     part_2_output = gr.Textbox(lines=7, interactive=False)
+                    part_2_prompt_output = gr.Textbox(
+                        label="Image prompt used",
+                        lines=3,
+                        interactive=False,
+                    )
                     part_2_image_output = gr.Image(
                         label="Part 2 image",
                         interactive=False,
@@ -219,6 +238,11 @@ def build_demo() -> gr.Blocks:
                 with gr.Column(elem_classes=["surface-card", "story-part-card"]):
                     gr.Markdown("### Story Part 3", elem_classes=["debug-title"])
                     part_3_output = gr.Textbox(lines=7, interactive=False)
+                    part_3_prompt_output = gr.Textbox(
+                        label="Image prompt used",
+                        lines=3,
+                        interactive=False,
+                    )
                     part_3_image_output = gr.Image(
                         label="Part 3 image",
                         interactive=False,
@@ -245,12 +269,15 @@ def build_demo() -> gr.Blocks:
                     description_output,
                     full_conversation_output,
                     part_1_output,
+                    part_1_prompt_output,
                     part_1_image_output,
                     part_1_audio_output,
                     part_2_output,
+                    part_2_prompt_output,
                     part_2_image_output,
                     part_2_audio_output,
                     part_3_output,
+                    part_3_prompt_output,
                     part_3_image_output,
                     part_3_audio_output,
                     final_video_output,

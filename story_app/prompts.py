@@ -18,6 +18,13 @@ STORY_SYSTEM_PROMPT = (
     "parts. Reply only with the requested story text. Do not add labels or meta commentary."
 )
 
+IMAGE_PROMPT_SYSTEM_PROMPT = (
+    "You turn one bedtime-story moment into one compact image prompt for a CLIP-limited image model. Keep only "
+    "visually depictable details. Prioritize distinctive characters, objects, colors, setting, time of day, and "
+    "the main visible action. Keep the prompt short, concrete, and storybook-friendly. Do not mention text, "
+    "captions, logos, watermarks, borders, panels, cameras, or artist names."
+)
+
 PART_2_USER_PROMPT = "Write only part 2 of the same bedtime story. Continue directly, stay grounded in the same scene description, keep it gentle, and write about 50 words. Reply only with the story text."
 
 PART_3_USER_PROMPT = "Write only part 3 of the same bedtime story. Continue directly, stay grounded in the same scene description, end with a calm hopeful feeling, and write about 50 words. Reply only with the story text."
@@ -98,6 +105,26 @@ def build_story_part_image_prompt(
     )
 
 
+def build_story_part_image_summary_messages(
+    config: GenerationConfig,
+    *,
+    description_text: str,
+    part_text: str,
+) -> list[dict[str, Any]]:
+    prompt_text = (
+        "Write one compact prompt for a single storybook illustration of this story moment.\n\n"
+        f"Scene description:\n{description_text}\n\n"
+        f"Story moment:\n{part_text}\n\n"
+        f"Target visual style:\n{config.image_prompt_style_suffix}\n\n"
+        f"Keep it under {config.image_prompt_summary_max_words} words. Fold the visual style naturally into the "
+        "same short prompt instead of listing separate instructions. Reply only with the final image prompt text."
+    )
+    return [
+        {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
+        {"role": "user", "content": prompt_text},
+    ]
+
+
 def _format_message_content(content: Any) -> str:
     if isinstance(content, list):
         lines: list[str] = []
@@ -138,5 +165,14 @@ def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
     if len(text.split()) < config.min_story_part_words:
         raise ValidationError(
             f"Story part must contain at least {config.min_story_part_words} words."
+        )
+    return text
+
+
+def validate_image_prompt_text(raw_text: str, config: GenerationConfig) -> str:
+    text = normalize_text(raw_text)
+    if len(text.split()) > config.image_prompt_summary_max_words:
+        raise ValidationError(
+            f"Image prompt summary must contain at most {config.image_prompt_summary_max_words} words."
         )
     return text

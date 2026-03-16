@@ -13,10 +13,11 @@ from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
     build_description_prompt,
     build_description_messages,
-    build_story_part_image_prompt,
+    build_story_part_image_summary_messages,
     build_story_messages,
     format_story_messages,
     validate_description_text,
+    validate_image_prompt_text,
     validate_story_part_text,
 )
 from .providers import (
@@ -164,10 +165,17 @@ class KidStoryPipeline:
             )
             writer.generate_part(warm_image_path, warm_story_messages)
 
-            prompt_text = build_story_part_image_prompt(
+            prompt_messages = build_story_part_image_summary_messages(
                 self.config,
                 description_text=warm_description,
                 part_text=warm_story_text,
+            )
+            prompt_text = writer.generate_image_prompt(prompt_messages)
+            prompt_text = validate_image_prompt_text(prompt_text, self.config)
+            prompt_token_counts = image_generator.validate_prompt_token_budget(prompt_text)
+            print(
+                "[warmup] Image prompt token counts: "
+                + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())
             )
             image_generator.generate(
                 prompt_text=prompt_text,
@@ -354,6 +362,7 @@ class KidStoryPipeline:
             progress_callback=progress_callback,
         )
         image_generator = self._get_image_generator()
+        writer = self._get_writer()
         narrator = self._get_narrator()
         word_aligner = self._get_word_aligner()
         video_assembler = self._get_video_assembler()
@@ -397,10 +406,17 @@ class KidStoryPipeline:
         progress_points = [0.92, 0.94, 0.96]
 
         for index, part_text in enumerate(story_parts, start=1):
-            prompt_text = build_story_part_image_prompt(
+            prompt_messages = build_story_part_image_summary_messages(
                 self.config,
                 description_text=draft_result.description.description_text,
                 part_text=part_text,
+            )
+            prompt_text = writer.generate_image_prompt(prompt_messages)
+            prompt_text = validate_image_prompt_text(prompt_text, self.config)
+            prompt_token_counts = image_generator.validate_prompt_token_budget(prompt_text)
+            print(
+                f"[pipeline] part_{index} image prompt token counts: "
+                + ", ".join(f"{name}={count}" for name, count in prompt_token_counts.items())
             )
             prompt_path = prompt_paths[index - 1]
             image_path_for_part = image_paths[index - 1]

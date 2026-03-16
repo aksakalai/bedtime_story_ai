@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-final-video-warmup-v16-20260316"
+APP_BUILD = "phase2-image-prompt-summaries-v19-20260316"
 
 
 @dataclass(frozen=True)
@@ -40,6 +40,8 @@ class GenerationConfig:
         "low quality, blurry, muddy colors, flat lighting, deformed anatomy, extra limbs, duplicate characters, "
         "cropped face, text, letters, watermark, logo, signature, frame, border, collage, split panel"
     )
+    image_prompt_summary_max_tokens: int = 77
+    image_prompt_summary_max_words: int = 40
     image_seed_stride: int = 1000
     narration_lang_code: str = "a"
     narration_voice: str = "af_heart"

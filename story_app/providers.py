@@ -122,7 +122,7 @@ class Qwen25VLMultimodalEngine:
     def _generate_from_messages(
         self,
         *,
-        image_path: str | Path,
+        image_path: str | Path | None,
         messages: list[dict[str, Any]],
         max_new_tokens: int,
         log_prefix: str,
@@ -141,6 +141,8 @@ class Qwen25VLMultimodalEngine:
 
         images: list[Any] = []
         if image_slots:
+            if image_path is None:
+                raise ValidationError("Image-backed generation requires an input image path.")
             with Image.open(image_path) as image:
                 image = image.convert("RGB")
                 images = [image.copy() for _ in range(image_slots)]
@@ -227,6 +229,18 @@ class Qwen25VLMultimodalEngine:
             error_message=(
                 "Story generation did not finish naturally before the safety limit. "
                 "Increase the story token ceiling or tighten the prompt."
+            ),
+        )
+
+    def generate_image_prompt(self, messages: list[dict[str, Any]]) -> str:
+        return self._generate_from_messages(
+            image_path=None,
+            messages=messages,
+            max_new_tokens=self.config.image_prompt_summary_max_tokens,
+            log_prefix="image_prompt",
+            error_message=(
+                "Image prompt summary generation did not finish naturally before the safety limit. "
+                "Tighten the summary prompt or lower the requested detail."
             ),
         )
 
@@ -331,6 +345,42 @@ class SSD1BTextToImageGenerator:
         generated_image.save(output_path)
         print(f"[image] Saved image to {output_path}")
         return output_path
+
+    def _count_tokens(self, tokenizer: Any, text: str) -> int:
+        encoded = tokenizer(
+            text,
+            truncation=False,
+            add_special_tokens=True,
+            return_attention_mask=False,
+        )
+        input_ids = encoded.get("input_ids", [])
+        if input_ids and isinstance(input_ids[0], list):
+            input_ids = input_ids[0]
+        return len(input_ids)
+
+    def validate_prompt_token_budget(self, prompt_text: str) -> dict[str, int]:
+        self._load()
+        assert self.pipeline is not None
+
+        counts: dict[str, int] = {}
+        violations: list[str] = []
+        for tokenizer_name in ("tokenizer", "tokenizer_2"):
+            tokenizer = getattr(self.pipeline, tokenizer_name, None)
+            if tokenizer is None:
+                continue
+            token_count = self._count_tokens(tokenizer, prompt_text)
+            counts[tokenizer_name] = token_count
+            model_max_length = getattr(tokenizer, "model_max_length", None)
+            if isinstance(model_max_length, int) and model_max_length > 0 and token_count > model_max_length:
+                violations.append(f"{tokenizer_name}={token_count}>{model_max_length}")
+
+        if violations:
+            raise ValidationError(
+                "Image prompt exceeds the current image model token budget: "
+                + ", ".join(violations)
+            )
+
+        return counts
 
     def unload(self, clear_cache: bool = False) -> None:
         if clear_cache:
