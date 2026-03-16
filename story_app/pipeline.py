@@ -11,7 +11,7 @@ from PIL import Image
 from .assets import prepare_run_paths, write_json, write_text
 from .config import DEFAULT_CONFIG, GenerationConfig
 from .prompts import (
-    build_continuity_brief_messages,
+    build_continuity_brief_messages_from_story,
     build_description_prompt,
     build_description_messages,
     build_story_part_image_summary_messages,
@@ -37,6 +37,7 @@ from .schemas import (
     StoryDraft,
     StoryboardManifest,
     StoryboardManifestPart,
+    ValidationError,
 )
 from .video import FFmpegVideoAssembler, align_story_text_to_timestamps, build_story_part_ass
 
@@ -165,14 +166,21 @@ class KidStoryPipeline:
 
             description_messages = build_description_messages(build_description_prompt(self.config))
             describer.describe(warm_image_path, description_messages)
-            continuity_messages = build_continuity_brief_messages(warm_description)
-            warm_continuity_brief = writer.generate_continuity_brief(continuity_messages)
             warm_story_messages = build_story_messages(
                 description_text=warm_description,
-                continuity_brief=warm_continuity_brief,
                 previous_parts=[],
             )
             writer.generate_part(warm_image_path, warm_story_messages)
+            warm_continuity_brief = ""
+            try:
+                continuity_messages = build_continuity_brief_messages_from_story(
+                    description_text=warm_description,
+                    story_parts=[warm_story_text],
+                )
+                raw_warm_continuity_brief = writer.generate_continuity_brief(continuity_messages)
+                warm_continuity_brief = validate_continuity_brief_text(raw_warm_continuity_brief, self.config)
+            except ValidationError as exc:
+                print(f"[warmup] Continuity brief skipped: {exc}")
 
             prompt_messages = build_story_part_image_summary_messages(
                 self.config,
@@ -307,15 +315,10 @@ class KidStoryPipeline:
 
         self._notify(progress_callback, 0.35, "Writing part 1")
         writer = self._get_writer()
-        continuity_messages = build_continuity_brief_messages(description_text)
-        raw_continuity_brief = writer.generate_continuity_brief(continuity_messages)
-        continuity_brief = validate_continuity_brief_text(raw_continuity_brief, self.config)
-        print(f"[pipeline] Continuity brief: {continuity_brief}")
         story_parts: list[str] = []
         for index, step_name in enumerate(("part_1", "part_2", "part_3"), start=1):
             messages = build_story_messages(
                 description_text=description_text,
-                continuity_brief=continuity_brief,
                 previous_parts=story_parts,
             )
             raw_output = writer.generate_part(run_paths.input_image_path, messages)
@@ -336,9 +339,21 @@ class KidStoryPipeline:
             print(f"[pipeline] {step_name} output: {output_text}")
             self._notify(progress_callback, 0.35 + (index * 0.18), f"Generated {step_name}")
 
+        continuity_brief = ""
+        try:
+            continuity_messages = build_continuity_brief_messages_from_story(
+                description_text=description_text,
+                story_parts=story_parts,
+            )
+            raw_continuity_brief = writer.generate_continuity_brief(continuity_messages)
+            continuity_brief = validate_continuity_brief_text(raw_continuity_brief, self.config)
+        except ValidationError as exc:
+            print(f"[pipeline] Continuity brief skipped: {exc}")
+        else:
+            print(f"[pipeline] Continuity brief: {continuity_brief}")
+
         final_messages = build_story_messages(
             description_text=description_text,
-            continuity_brief=continuity_brief,
             previous_parts=story_parts[:2],
         )
         full_conversation_messages = [

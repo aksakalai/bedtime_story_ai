@@ -10,27 +10,28 @@ DESCRIPTION_SYSTEM_PROMPT = (
     "You carefully observe the image and follow the current request. Write only one grounded prose paragraph that "
     "defines the scene and one central actor for a children's story. If a notable character is clearly present, use "
     "that character as the actor. If no notable character is clearly present, invent one fitting scene-related actor "
-    "using a descriptive role instead of a proper name. Do not add labels or meta commentary."
+    "using a descriptive role instead of a proper name. The paragraph must explicitly state who that actor is. Do "
+    "not add labels or meta commentary."
 )
 
 DESCRIPTION_USER_PROMPT_SUFFIX = " Reply only with the description text."
 
 CONTINUITY_BRIEF_SYSTEM_PROMPT = (
-    "You turn a scene-and-actor description into one short continuity brief for recurring visual consistency across "
-    "three children's picture-book pages. Identify the central actor and only the few recurring visual anchors that "
-    "should stay consistent when they remain visible. Use concrete colors, sizes, and identities only when the "
-    "description already gives them. Reply only with the continuity brief text."
+    "You turn a scene-and-actor description into one tiny continuity brief for recurring visual consistency across "
+    "three children's picture-book pages. Reply with one compact line only, not a paragraph. Name the actor first, "
+    "then list only the few recurring anchors that should stay visually the same when visible. Use concrete colors "
+    "and identities only when the description already gives them. Do not rewrite the full scene description. Reply "
+    "only with the continuity brief text."
 )
 
 STORY_SYSTEM_PROMPT = (
     "You write gentle bedtime-story prose for three consecutive children's picture-book pages that follow the same "
     "central actor across one simple story arc. Stay faithful to the scene-and-actor description and to earlier "
-    "parts. You may also receive a continuity brief that locks the recurring visual canon. Keep those recurring "
-    "elements consistent whenever they stay visible. Part 1 introduces the scene and actor. Part 2 introduces one "
-    "visible event, mystery, or noticeable change affecting that actor. Part 3 resolves that same event with a calm "
-    "hopeful ending. If the setting shifts, move only to a directly related nearby place from the previous page. "
-    "Keep the actor consistent and do not introduce proper names unless the description already uses one. Reply only "
-    "with the requested story text."
+    "parts. Part 1 introduces the scene and actor. Part 2 introduces one visible event, mystery, or noticeable "
+    "change affecting that actor. Part 3 resolves that same event with a calm hopeful ending. If the setting "
+    "shifts, move only to a directly related nearby place from the previous page. Keep the actor consistent, keep "
+    "the prose concise, and do not introduce proper names unless the description already uses one. Reply only with "
+    "the requested story text."
 )
 
 IMAGE_PROMPT_SYSTEM_PROMPT = (
@@ -86,12 +87,35 @@ def build_description_messages(prompt_text: str) -> list[dict[str, Any]]:
 
 
 def build_continuity_brief_messages(description_text: str) -> list[dict[str, Any]]:
+    return build_continuity_brief_messages_from_story(
+        description_text=description_text,
+        story_parts=[],
+    )
+
+
+def build_continuity_brief_messages_from_story(
+    *,
+    description_text: str,
+    story_parts: list[str],
+) -> list[dict[str, Any]]:
+    story_section = ""
+    if story_parts:
+        story_lines = [
+            f"Part {index}: {part_text}"
+            for index, part_text in enumerate(story_parts, start=1)
+        ]
+        story_section = "Story parts:\n" + "\n".join(story_lines) + "\n\n"
+
     prompt_text = (
-        "Write one short continuity brief based on the scene-and-actor description below.\n\n"
+        "Write one tiny continuity brief based on the scene-and-actor description and story text below.\n\n"
         f"Scene and actor description:\n{description_text}\n\n"
-        "State the central actor first. Then name only the few recurring visual anchors that should remain visually "
-        "consistent across pages when visible, such as specific colors or identities for the home, vehicle, trees, "
-        "or other recurring elements. Keep it concise and concrete. Reply only with the continuity brief text."
+        f"{story_section}"
+        "Reply in exactly this compact format:\n"
+        "actor: <actor>; anchors: <anchor 1>, <anchor 2>, <anchor 3>\n\n"
+        "Choose the actor the story actually follows. If the story does not clearly follow a character, choose a "
+        "fitting descriptive-role actor from the scene description. Mention at most 3 recurring anchors that should "
+        "stay visually the same when visible. Keep it extremely concise and do not rewrite the whole scene or story. "
+        "Reply only with the continuity brief text."
     )
     return [
         {"role": "system", "content": CONTINUITY_BRIEF_SYSTEM_PROMPT},
@@ -99,27 +123,25 @@ def build_continuity_brief_messages(description_text: str) -> list[dict[str, Any
     ]
 
 
-def build_story_part_1_prompt(description_text: str, continuity_brief: str) -> str:
+def build_story_part_1_prompt(description_text: str) -> str:
     return (
         "Write only part 1 of a gentle three-part bedtime story based on the scene description below.\n\n"
         f"Scene and actor description:\n{description_text}\n\n"
-        f"Continuity brief:\n{continuity_brief}\n\n"
         "Open with the same central actor in the described setting. Establish who the actor is, where they are, and "
         "the calm mood of the page. Let the actor notice or approach something gentle, but do not start the main "
-        "event yet. Keep it warm, concrete, and easy to illustrate. Use exactly 3 sentences. Reply only with the "
-        "story text."
+        "event yet. Keep it warm, concrete, easy to illustrate, concise, and make each sentence short. Use exactly "
+        "3 sentences. Reply only with the story text."
     )
 
 
 def build_story_messages(
     *,
     description_text: str,
-    continuity_brief: str,
     previous_parts: list[str],
 ) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": STORY_SYSTEM_PROMPT},
-        {"role": "user", "content": build_story_part_1_prompt(description_text, continuity_brief)},
+        {"role": "user", "content": build_story_part_1_prompt(description_text)},
     ]
 
     if not previous_parts:
@@ -184,17 +206,22 @@ def build_story_part_image_summary_messages(
             "Preserve continuity with that page, but describe the next page instead of repeating it.\n\n"
         )
 
+    continuity_section = ""
+    if continuity_brief:
+        continuity_section = f"Continuity brief:\n{continuity_brief}\n\n"
+
     prompt_text = (
         "Write one short sentence prompt for a single children's picture-book illustration of this story moment.\n\n"
         f"Scene and actor description:\n{description_text}\n\n"
-        f"Continuity brief:\n{continuity_brief}\n\n"
+        f"{continuity_section}"
         f"Story moment:\n{part_text}\n\n"
         f"{previous_page_section}"
         f"{part_role}\n\n"
         f"Keep the final sentence within {max_image_prompt_tokens} image-model tokens. Mention the same actor first "
         "or early, use at most two recurring anchor details only if they help continuity, and if a recurring anchor "
-        "from the continuity brief is visible on this page, keep its same described color and identity. Focus on the "
-        "single page-defining visible change or settled ending state. Reply only with the final sentence."
+        "from the continuity brief is visible on this page, keep its same described color and identity. Keep the "
+        "sentence extremely concise, do not echo the full scene description, and focus on the single page-defining "
+        "visible change or settled ending state. Reply only with the final sentence."
     )
     return [
         {"role": "system", "content": IMAGE_PROMPT_SYSTEM_PROMPT},
@@ -245,7 +272,11 @@ def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
 
 
 def validate_continuity_brief_text(raw_text: str, config: GenerationConfig) -> str:
-    return normalize_text(raw_text)
+    text = normalize_text(raw_text)
+    words = text.split()
+    if len(words) > 24:
+        text = " ".join(words[:24]).rstrip(",;:")
+    return text
 
 
 def validate_image_prompt_text(raw_text: str, config: GenerationConfig) -> str:

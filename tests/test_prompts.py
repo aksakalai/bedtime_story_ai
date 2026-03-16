@@ -10,6 +10,7 @@ from story_app.prompts import (
     PART_3_USER_PROMPT,
     STORY_SYSTEM_PROMPT,
     build_continuity_brief_messages,
+    build_continuity_brief_messages_from_story,
     build_description_messages,
     build_description_prompt,
     build_story_messages,
@@ -25,11 +26,12 @@ from story_app.schemas import ValidationError
 class PromptTests(unittest.TestCase):
     def test_build_description_prompt_targets_scene_and_actor_brief(self):
         prompt = build_description_prompt(DEFAULT_CONFIG)
-        self.assertIn("about 5 sentences", prompt)
+        self.assertIn("about 5 short sentences", prompt)
         self.assertIn("one notable central actor or character", prompt)
         self.assertIn("If no notable character is clearly present, invent one fitting scene-related actor", prompt)
         self.assertIn("descriptive role instead of a proper name", prompt)
         self.assertIn("Keep all other details faithful to visible scene facts", prompt)
+        self.assertIn("Keep the prose concise", prompt)
         self.assertIn("Reply only with the description text", prompt)
 
     def test_build_description_messages_uses_system_and_image_turn(self):
@@ -46,31 +48,45 @@ class PromptTests(unittest.TestCase):
 
     def test_story_system_prompt_requires_same_actor_and_arc(self):
         self.assertIn("same central actor", STORY_SYSTEM_PROMPT)
-        self.assertIn("continuity brief", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 2 introduces one visible event, mystery, or noticeable change", STORY_SYSTEM_PROMPT)
         self.assertIn("Part 3 resolves that same event", STORY_SYSTEM_PROMPT)
         self.assertIn("directly related nearby place", STORY_SYSTEM_PROMPT)
+        self.assertIn("keep the prose concise", STORY_SYSTEM_PROMPT)
 
     def test_build_continuity_brief_messages_targets_recurring_visual_canon(self):
         messages = build_continuity_brief_messages("A blue house with a red roof stands behind a child in a sunny yard.")
 
         self.assertEqual(messages[0]["content"], CONTINUITY_BRIEF_SYSTEM_PROMPT)
         self.assertIn("Scene and actor description:", messages[1]["content"])
-        self.assertIn("State the central actor first", messages[1]["content"])
-        self.assertIn("recurring visual anchors", messages[1]["content"])
+        self.assertIn("Reply in exactly this compact format", messages[1]["content"])
+        self.assertIn("actor: <actor>; anchors: <anchor 1>, <anchor 2>, <anchor 3>", messages[1]["content"])
         self.assertIn("Reply only with the continuity brief text", messages[1]["content"])
+
+    def test_build_continuity_brief_messages_from_story_uses_story_actor_context(self):
+        messages = build_continuity_brief_messages_from_story(
+            description_text="A blue house with a red roof stands in a sunny yard.",
+            story_parts=[
+                "A curious yard child stands by the blue house and listens to the breeze.",
+                "The yard child hears a rustle by the green tree and steps closer.",
+                "The yard child finds a white rabbit and smiles beside the blue house.",
+            ],
+        )
+
+        self.assertEqual(messages[0]["content"], CONTINUITY_BRIEF_SYSTEM_PROMPT)
+        self.assertIn("Story parts:", messages[1]["content"])
+        self.assertIn("Part 1:", messages[1]["content"])
+        self.assertIn("Choose the actor the story actually follows", messages[1]["content"])
 
     def test_build_story_part_1_prompt_injects_scene_and_actor_description(self):
         prompt = build_story_part_1_prompt(
             "A blue house stands beside two green trees and a blue car.",
-            "The central actor is a cheerful boy, and the recurring anchors are the blue house with a red roof and the small blue car.",
         )
         self.assertIn("part 1 of a gentle three-part bedtime story", prompt)
         self.assertIn("Scene and actor description:", prompt)
-        self.assertIn("Continuity brief:", prompt)
         self.assertIn("A blue house stands beside two green trees and a blue car.", prompt)
         self.assertIn("Open with the same central actor", prompt)
         self.assertIn("do not start the main event yet", prompt)
+        self.assertIn("make each sentence short", prompt)
         self.assertIn("Use exactly 3 sentences", prompt)
 
     def test_part_2_prompt_targets_actor_affecting_event(self):
@@ -88,7 +104,6 @@ class PromptTests(unittest.TestCase):
     def test_build_story_messages_for_part_1_starts_new_text_only_conversation(self):
         messages = build_story_messages(
             description_text="A blue house stands beside two green trees and a blue car.",
-            continuity_brief="The same blue house, red roof, and blue car should stay visually consistent when visible.",
             previous_parts=[],
         )
 
@@ -101,7 +116,6 @@ class PromptTests(unittest.TestCase):
     def test_build_story_messages_for_part_2_keeps_text_history_only(self):
         messages = build_story_messages(
             description_text="A rabbit stands beside a pond.",
-            continuity_brief="The rabbit, pond, and lantern stay visually consistent when visible.",
             previous_parts=["The rabbit watched the still pond shine softly."],
         )
 
@@ -113,7 +127,6 @@ class PromptTests(unittest.TestCase):
     def test_build_story_messages_for_part_3_keeps_full_text_history(self):
         messages = build_story_messages(
             description_text="A rabbit stands beside a pond.",
-            continuity_brief="The rabbit, pond, and lantern stay visually consistent when visible.",
             previous_parts=[
                 "The rabbit watched the still pond shine softly.",
                 "A small ripple widened once and then grew still again.",
@@ -158,7 +171,6 @@ class PromptTests(unittest.TestCase):
                     "role": "user",
                     "content": build_story_part_1_prompt(
                         "A calm blue house beside two trees.",
-                        "The same calm blue house and two trees should stay visually consistent when visible.",
                     ),
                 },
                 {"role": "assistant", "content": "A calm story part."},
@@ -167,7 +179,6 @@ class PromptTests(unittest.TestCase):
 
         self.assertIn("SYSTEM:", formatted)
         self.assertIn("Scene and actor description:", formatted)
-        self.assertIn("Continuity brief:", formatted)
         self.assertIn("ASSISTANT:", formatted)
         self.assertIn("A calm story part.", formatted)
 

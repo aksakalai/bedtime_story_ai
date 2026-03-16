@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-APP_BUILD = "phase2-continuity-brief-v27-20260316"
+APP_BUILD = "phase2-continuity-brief-tight-v28-20260316"
 
 
 @dataclass(frozen=True)
@@ -20,17 +20,19 @@ class ModelIds:
 class GenerationConfig:
     outputs_root: Path = field(default_factory=lambda: Path("outputs"))
     description_prompt_prefix: str = (
-        "Describe the depicted scene in one grounded prose paragraph of about 5 sentences. First establish the "
+        "Describe the depicted scene in one grounded prose paragraph of about 5 short sentences. First establish the "
         "setting. Then identify one notable central actor or character if one is clearly present. If no notable "
         "character is clearly present, invent one fitting scene-related actor using a descriptive role instead of a "
         "proper name, and make that actor feel natural in the scene. Describe the actor clearly enough for story and "
         "image continuity, including what they look like, where they are, and what they are doing or noticing. Keep "
-        "all other details faithful to visible scene facts. Do not mention the image, drawing, painting, paper, "
-        "style, artist, or composition unless those are part of the depicted scene itself. Reply only with the "
+        "all other details faithful to visible scene facts. Keep the prose concise. Do not mention the image, "
+        "drawing, painting, paper, style, artist, or composition unless those are part of the depicted scene itself. "
+        "Reply only with the "
         "description text."
     )
-    description_max_tokens: int = 320
-    story_part_max_tokens: int = 256
+    description_max_tokens: int = 384
+    story_part_max_tokens: int = 320
+    continuity_brief_max_tokens: int = 64
     image_width: int = 1024
     image_height: int = 1024
     image_num_inference_steps: int = 20

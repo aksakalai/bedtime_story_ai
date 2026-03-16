@@ -236,7 +236,7 @@ class Qwen25VLMultimodalEngine:
         return self._generate_from_messages(
             image_path=None,
             messages=messages,
-            max_new_tokens=self.config.story_part_max_tokens,
+            max_new_tokens=self.config.continuity_brief_max_tokens,
             log_prefix="continuity",
             error_message=(
                 "Continuity brief generation did not finish naturally before the safety limit. "

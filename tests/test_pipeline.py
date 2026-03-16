@@ -290,7 +290,7 @@ class PipelineTests(unittest.TestCase):
                 pipeline.create_story_draft(self._create_input_file(root))
             self.assertEqual(NonEosStoryProvider.instances[0].story_calls, 2)
 
-    def test_pipeline_stops_when_continuity_brief_does_not_finish_with_eos(self):
+    def test_pipeline_skips_continuity_brief_when_it_does_not_finish_with_eos(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             pipeline = KidStoryPipeline(
@@ -298,8 +298,10 @@ class PipelineTests(unittest.TestCase):
                 describer_factory=NonEosContinuityProvider,
                 writer_factory=NonEosContinuityProvider,
             )
-            with self.assertRaises(ValidationError):
-                pipeline.create_story_draft(self._create_input_file(root))
+            result = pipeline.create_story_draft(self._create_input_file(root))
+            self.assertEqual(result.part_1_text, VALID_PART_1)
+            self.assertEqual(result.part_2_text, VALID_PART_1)
+            self.assertEqual(result.part_3_text, VALID_PART_1)
 
     def test_pipeline_smoke_path_saves_minimal_story_artifacts(self):
         SharedFakeProvider.instances = []
