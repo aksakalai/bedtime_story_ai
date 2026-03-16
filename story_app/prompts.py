@@ -179,10 +179,4 @@ def validate_story_part_text(raw_text: str, config: GenerationConfig) -> str:
 
 
 def validate_image_prompt_text(raw_text: str, config: GenerationConfig) -> str:
-    text = normalize_text(raw_text)
-    sentence_parts = [part.strip() for part in re.split(r"[.!?]+", text) if part.strip()]
-    if len(sentence_parts) > 1:
-        raise ValidationError(
-            "Image prompt summary must be exactly one sentence."
-        )
-    return text
+    return normalize_text(raw_text)

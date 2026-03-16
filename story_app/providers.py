@@ -386,6 +386,7 @@ class SSD1BTextToImageGenerator:
         prompt_text: str,
         *,
         buffer_tokens: int = 0,
+        strict: bool = True,
     ) -> dict[str, int]:
         self._load()
         assert self.pipeline is not None
@@ -404,7 +405,7 @@ class SSD1BTextToImageGenerator:
                 if token_count > effective_limit:
                     violations.append(f"{tokenizer_name}={token_count}>{effective_limit}")
 
-        if violations:
+        if violations and strict:
             raise ValidationError(
                 "Image prompt exceeds the current image model token budget: "
                 + ", ".join(violations)

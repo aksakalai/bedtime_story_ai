@@ -184,6 +184,7 @@ class KidStoryPipeline:
             prompt_token_counts = image_generator.validate_prompt_token_budget(
                 prompt_text,
                 buffer_tokens=self.config.image_prompt_token_buffer,
+                strict=False,
             )
             print(
                 f"[warmup] Image prompt token limit: {image_prompt_token_limit}"
@@ -439,6 +440,7 @@ class KidStoryPipeline:
             prompt_token_counts = image_generator.validate_prompt_token_budget(
                 prompt_text,
                 buffer_tokens=self.config.image_prompt_token_buffer,
+                strict=False,
             )
             print(
                 f"[pipeline] part_{index} image prompt token limit: {image_prompt_token_limit}"
